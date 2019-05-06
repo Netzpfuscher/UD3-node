@@ -24,28 +24,24 @@ module.exports = class minprot{
 			ACK: 0xff,
 			RESET: 0xfe
 		}
-		
 		this.rx.frame = [];
-		this.rx.frame.state=0;              // State of receiver
 		this.rx.frame.payload_bytes=0;      // Length of payload received so far
 		this.rx.frame.id_control=0;         // ID and control bit of frame being received
 		this.rx.frame.seq = 0;				// Sequence number of frame being received
 		this.rx.frame.length = 0;			// Length of frame
 		this.rx.frame.payload = [];
-		
+
 		this.tx=[];
 		this.tx.header_byte_countdown=0;
-		
+
 		this.rx_space = 512,
-		
 		this.crc = 0;
-			
-			
+
 		this.rx.header_bytes_seen = 0;
 		this.rx.frame_state = this.rx.states.SOF;
 		this.remote_rx_space=512;
-		
-		// Counters for diagnosis purposes
+
+	// Counters for diagnosis purposes
 		this.transport_fifo = [];
 		this.transport_fifo.spurious_acks = 0;
 		this.transport_fifo.sequence_mismatch_drop = 0;
@@ -56,31 +52,28 @@ module.exports = class minprot{
 		this.transport_fifo.sn_min= 0;
 		this.transport_fifo.sn_max= 0;
 		this.transport_fifo.rn= 0;
-        this.transport_fifo.last_sent_ack_time_ms=0;
-        this.transport_fifo.last_sent_frame=0;
-        this.transport_fifo.last_received_anything_ms=Date.now();
-        this.transport_fifo.last_received_frame_ms=0;
+	    this.transport_fifo.last_sent_ack_time_ms=0;
+	    this.transport_fifo.last_sent_frame=0;
+	    this.transport_fifo.last_received_anything_ms=Date.now();
+	    this.transport_fifo.last_received_frame_ms=0;
 		this.transport_fifo.frames= [];
-        this.TRANSPORT_IDLE_TIMEOUT_MS = 1000;
-        this.TRANSPORT_MAX_WINDOW_SIZE = 16;
-        this.TRANSPORT_ACK_RETRANSMIT_TIMEOUT_MS=50;
-        this.TRANSPORT_FRAME_RETRANSMIT_TIMEOUT_MS=100;
-		
+	    this.TRANSPORT_IDLE_TIMEOUT_MS = 1000;
+	    this.TRANSPORT_MAX_WINDOW_SIZE = 16;
+	    this.TRANSPORT_ACK_RETRANSMIT_TIMEOUT_MS=50;
+	    this.TRANSPORT_FRAME_RETRANSMIT_TIMEOUT_MS=100;
+
 		this.sendByte = 0;
-        this.handler = 0;
-		
+	    this.handler = 0;
+
 		this.conf = [];
 		this.conf.max_payload = 255;
 		this.serial_buffer = [];
-        
-        this.now = Date.now();
-		
+
+	    this.now = Date.now();
 		this.debug =0;
-			
-		
-		//transport_fifo_reset(self);
-    }
-	
+
+    	}
+
 	crc32_init_context(){
 		this.crc = 0xFFFFFFFF;
 	}
@@ -92,12 +85,12 @@ module.exports = class minprot{
 			this.crc = (this.crc >>> 1) ^ (0xedb88320 & mask);
 		}
 	}
-	
+
 	crc32_finalize()
 	{
 		return ~this.crc;
 	}
-	
+
 	rx_byte(byte) {
 		// Regardless of state, three header bytes means "start of frame" and
 		// should reset the frame buffer and be ready to receive frame data
@@ -231,10 +224,6 @@ module.exports = class minprot{
 	}
 
 	valid_frame_received(frame){
-			
-		//uint8_t id_control = self->rx_frame_id_control;
-		//uint8_t *payload = self->rx_frame_payload_buf;
-		//uint8_t payload_len = self->rx_control;
 
 		let seq = frame.seq;
 		let num_acked;
@@ -274,14 +263,9 @@ module.exports = class minprot{
                         let last_pop = this.transport_fifo.frames.shift();
                         if(this.debug) console.log("Popping frame id="+last_pop.min_id+" seq=" + last_pop.seq);
 					}
-					let idx = this.transport_fifo.head_idx;
 					// Now retransmit the number of frames that were requested
 					for(let i = 0; i < num_nacked; i++) {
-						//struct transport_frame *retransmit_frame = &self->transport_fifo.frames[idx];
-						//transport_fifo_send(self, retransmit_frame);
-						//transport_fifo_send(self, retransmit_frame);
-						//idx++;
-						//idx &= TRANSPORT_FIFO_SIZE_FRAMES_MASK;
+		
 					}
 				}
 				else {
@@ -318,7 +302,7 @@ module.exports = class minprot{
 						this.send_ack();
 
 						// Now ready to pass this up to the application handlers
-                        this.handler(frame.payload);
+                        this.handler(frame.id_control & 0x3f,frame.payload);
 						// Pass frame up to application handler to deal with
 						if(this.debug) console.log("Incoming app frame seq="+frame.seq+ ", id="+(frame.id_control&0x3f)+", payload len="+frame.payload.length);
 						//min_application_handler(id_control & (uint8_t)0x3fU, payload, payload_len, self->port);
@@ -332,15 +316,11 @@ module.exports = class minprot{
 				}
 				else {
 					// Not a transport frame
-
-					console.log(frame);
-					//min_application_handler(id_control & (uint8_t)0x3fU, payload, payload_len, self->port);
+					this.handler(frame.id_control & 0x3f,frame.payload);
 				}
 				break;
 		}
 
-		//min_application_handler(id_control & (uint8_t)0x3fU, payload, payload_len, self->port);
-	
 	}
 	
 	send_reset(){
@@ -463,10 +443,13 @@ module.exports = class minprot{
             let window_size = this.transport_fifo.sn_max - this.transport_fifo.sn_min; // Window size
             if((window_size < this.TRANSPORT_MAX_WINDOW_SIZE) && (this.transport_fifo.frames.length > window_size)) {
 				if(this.transport_fifo.frames.length){
-                    this.transport_fifo.frames[window_size].seq = this.transport_fifo.sn_max;
-                    this.transport_fifo.frames[window_size].last_send = this.now;
-					this.on_wire_bytes(this.transport_fifo.frames[window_size].min_id| 0x80, this.transport_fifo.frames[window_size].seq, this.transport_fifo.frames[window_size].payload);
-					this.transport_fifo.sn_max++;
+					let wire_size = this.on_wire_size(this.transport_fifo.frames[window_size].length);
+					if(wire_size < this.remote_rx_space) {
+						this.transport_fifo.frames[window_size].seq = this.transport_fifo.sn_max;
+						this.transport_fifo.frames[window_size].last_send = this.now;
+						this.on_wire_bytes(this.transport_fifo.frames[window_size].min_id| 0x80, this.transport_fifo.frames[window_size].seq, this.transport_fifo.frames[window_size].payload);
+						this.transport_fifo.sn_max++;
+					}
 				}
                 // There are new frames we can send; but don't even bother if there's no buffer space for them
 
@@ -481,7 +464,10 @@ module.exports = class minprot{
                             if(this.transport_fifo.frames[i].last_send<old) resend_frame_num = i;
                         }
                         if(resend_frame_num>-1 && (this.now - this.transport_fifo.frames[resend_frame_num].last_send) >= this.TRANSPORT_FRAME_RETRANSMIT_TIMEOUT_MS){
-                            this.on_wire_bytes(this.transport_fifo.frames[resend_frame_num].min_id| 0x80, this.transport_fifo.frames[resend_frame_num].seq, this.transport_fifo.frames[resend_frame_num].payload);
+							let wire_size = this.on_wire_size(this.transport_fifo.frames[resend_frame_num].length);
+							if(wire_size < this.remote_rx_space) {
+								this.on_wire_bytes(this.transport_fifo.frames[resend_frame_num].min_id| 0x80, this.transport_fifo.frames[resend_frame_num].seq, this.transport_fifo.frames[resend_frame_num].payload);
+							}
                         }
                             
                 }

@@ -1,0 +1,28 @@
+{
+  "name": "UD3-node",
+  "description": "UD3 serial to ethernet bridge",
+  "author": "Jens Kerrinnes <jens.kerrinnes@gmail.com>",
+  "homepage": "github.com/Netzpfuscher/UD3-node",
+  "bugs": "github.com/Netzpfuscher/UD3-node/issues",
+  "version": "0.0.1",
+  "license": "MIT",
+  "keywords": [
+    "Teslacoil",
+    "MIN-protocol"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Netzpfuscher/UD3-node.git"
+  },
+  "dependencies": {
+    "serialport": ">=7.0.0",
+    "yargs" : ">=13.2.2"
+  },
+  "scripts": {
+    "start": "node main.js"
+  },
+  "engines": {
+    "node": ">= 0.6.0"
+  },
+  "devDependencies": {}
+}
