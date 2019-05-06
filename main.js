@@ -89,6 +89,9 @@ var net = require('net');
 var server = net.createServer(function(socket) {
 	
 });
+var midi_server = net.createServer(function(socket) {
+	
+});
 
 function send_min_socket(num, info, connect){
 	if(connect == true){
@@ -114,7 +117,7 @@ server.on('connection', function(sock) {
     clients.push(sock);
 	send_min_socket(clients.indexOf(sock), sock.remoteAddress, true);
     sock.on('data', function(data) {
-        console.log('DATA ' + sock.remoteAddress + ': ' + data);
+        //console.log('DATA ' + sock.remoteAddress + ': ' + data);
         let rawBuffer = Buffer.from(data,'binary');
         minsvc.min_queue_frame(clients.indexOf(sock),rawBuffer);
     });
@@ -126,9 +129,9 @@ server.on('connection', function(sock) {
 });
 
 console.log("Bind midi server to " + (parseInt(ip[1],10)+1));
-server.listen(parseInt(ip[1],10)+1, ip[0]);
+midi_server.listen(parseInt(ip[1],10)+1, ip[0]);
 let midi_clients = [];
-server.on('connection', function(sock) {
+midi_server.on('connection', function(sock) {
     console.log('CONNECTED midi: ' + sock.remoteAddress + ':' + sock.remotePort);
 	if(midi_clients.length>=num_con){
 		console.log('ERROR: Max number of clients connected');
@@ -137,7 +140,7 @@ server.on('connection', function(sock) {
 	}
     midi_clients.push(sock);
     sock.on('data', function(data) {
-        console.log('DATA ' + sock.remoteAddress + ': ' + data);
+        //console.log('DATA ' + sock.remoteAddress + ': ' + data);
         let rawBuffer = Buffer.from(data,'binary');
         minsvc.min_queue_frame(MIN_ID_MIDI,rawBuffer);
     });
@@ -168,6 +171,11 @@ minsvc.handler = (id,data) => {
 	if(id==num_con){
 		telemetry.receive(data);
 	}
+    if(id==MIN_ID_MIDI){
+        for(let i=0;i<midi_clients.length;i++){
+            midi_clients[i].write(buf);
+        }
+    }
 }
 
 function start_mqtt_telemetry(){
