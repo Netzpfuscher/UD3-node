@@ -1,10 +1,15 @@
 var min = require("./min.js");
+var tt = require("./telemetry.js");
+var telemetry = new tt();
+
 var yargs = require('yargs');
+var mqtt = require('mqtt');
+var mqtt_client;
 
 var wd_timer;
 var loop_timer;
 
-const num_con = 2;
+var num_con = 3;
 
 const MIN_ID_WD=10;
 const MIN_ID_MIDI=20;
@@ -46,7 +51,13 @@ var argv = yargs
       			description: "<ip addr:port> bind server to ip",
       			requiresArg: true,
       			required: true
-    		}
+    		},
+		mqtt: {
+			alias: 'm',
+			description: "<mqtt broker> push telemetry to broker",
+                        requiresArg: false,
+                        required: false
+		}
   	})
 	.argv;
 
@@ -57,6 +68,17 @@ var minsvc = new min();
 if(argv.d){
 	console.log("Debug mode");
 	minsvc.debug = 1;
+}
+
+
+if(argv.mqtt){
+	console.log("Connecting to MQTT broker...: " + argv.mqtt);
+	mqtt_client = mqtt.connect(argv.mqtt);
+	num_con=2;
+	mqtt_client.on('connect', function (connack) {
+		console.log("Connected to MQTT broker: " + argv.mqtt);
+	})
+
 }
 
 
@@ -125,7 +147,12 @@ server.on('connection', function(sock) {
 	});
 });
 
-
+function gaugeValChange(data){
+	console.log(data);
+	if(mqtt_client.connected){
+		mqtt_client.publish(('telemetry/gauges/' + data.name), data.value);
+	}
+}
 
 
 
@@ -138,6 +165,15 @@ minsvc.handler = (id,data) => {
 	if(id <= num_con-1 && clients.length > id){
 		clients[id].write(buf);
 	}
+	if(id==num_con){
+		telemetry.receive(data);
+	}
+}
+
+function start_mqtt_telemetry(){
+	send_min_socket(num_con+1,"MQTT",true);
+	let rBuffer = Buffer.from("\rtterm start\r", 'utf-8');
+	minsvc.min_queue_frame(num_con+1,rBuffer);
 }
 
 
@@ -145,6 +181,10 @@ port.on('open', function() {
   loop_timer = setInterval(loop, 5);
   wd_timer = setInterval(wd_reset, 80);
   console.log("Opened serial port " + argv.port + " at " + argv.baudrate + " baud");
+  if(argv.mqtt){
+	  telemetry.cbGaugeValue = gaugeValChange;
+	  start_mqtt_telemetry();
+  }
 });
 
 // Switches the port into "flowing mode"
