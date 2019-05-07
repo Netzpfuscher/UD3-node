@@ -8,6 +8,7 @@ var mqtt_client;
 
 var wd_timer;
 var loop_timer;
+var port_reopen_timer;
 
 var num_con = 3;
 
@@ -160,6 +161,7 @@ function gaugeValChange(data){
 
 
 minsvc.sendByte = (data) => {
+	if(!port.writable) return;
 	port.write(data);
 }
 
@@ -189,6 +191,8 @@ port.on('open', function() {
   loop_timer = setInterval(loop, 5);
   wd_timer = setInterval(wd_reset, 80);
   console.log("Opened serial port " + argv.port + " at " + argv.baudrate + " baud");
+
+  //console.log(port);
   if(argv.mqtt){
 	  telemetry.cbGaugeValue = gaugeValChange;
 	  start_mqtt_telemetry();
@@ -200,9 +204,20 @@ port.on('data', function (data) {
    	minsvc.min_poll(data);
 });
 
+// Switches the port into "flowing mode"
+port.on('error', function (err) {
+   	//console.log(err);
+});
+port.on('close', function (err) {
+	setTimeout(() =>{
+		port.open();
+	}, 200);
+});
 
+var cnt=0
 function loop(){
    minsvc.min_poll();
+ 
 }
 
 function wd_reset(){
