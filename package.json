@@ -15,9 +15,11 @@
     "url": "https://github.com/Netzpfuscher/UD3-node.git"
   },
   "dependencies": {
+    "mqtt": ">=2.18.8",
     "serialport": ">=7.0.0",
-    "yargs": ">=13.2.2",
-    "mqtt": ">=2.18.8"
+    "server": "^1.0.18",
+    "socket.io": "^2.2.0",
+    "yargs": ">=13.2.2"
   },
   "scripts": {
     "start": "node main.js"
