@@ -1,14 +1,9 @@
 class btldr {
-    constructor(ip, port) {
-        this.ip = ip;
-        this.port = port;
-        this.connected = false;
-        this.socket=0;
+    constructor(write_cb, state_cb) {
         this.last_command=0x00;
         this.chip_id = '';
         this.silicon_rev = '';
         this.ldr_version = '';
-        this.ldr_conn=false;
         this.cyacd_file;
         this.cyacd_arr=[];
         this.cyacd_arr.array_id = [];
@@ -22,26 +17,31 @@ class btldr {
         this.time;
         this.info_cb=null;
         this.progress_cb=null;
+		this.write=write_cb;
+		this.state_cb=state_cb;
     }
 
+	read(data){
+		let buf = new Uint8Array(data);
+		switch(this.last_command){
+			case 0x38:
+				this.boot_decode_enter(buf);
+				console.log(this.chip_id);
+				break;
+			case 0x39:
+				if(buf[1]!=0) {
+					console.log('ERROR: Error at Row: ' + this.pc);
+				}
+				break;
+		}
 
-
+		this.last_command=0x00; 
+	}
+	
     connect(){
-        chrome.sockets.tcp.onReceive.addListener((info) => this.receive(info));
-        chrome.sockets.tcp.create({}, (info) => this.createInfo(info));
+        this.boot_cmd(0x38,[]);
     }
 
-    createInfo(info){
-        this.socket = info.socketId;
-        chrome.sockets.tcp.connect(this.socket,this.ip,this.port, (result) => this.callback_sck(result));
-    }
-
-    callback_sck(result){
-        if(!result){
-            this.connected = true;
-            this.boot_cmd(0x38,[]);
-        }
-    }
 
     set_progress_cb(cb_func){
         this.progress_cb=cb_func;
@@ -94,7 +94,7 @@ class btldr {
             this.send_info('INFO: Chip-ID matches, start programming of flash');
         }else{
             this.send_info('INFO: Chip-ID match failed... exit');
-            return;
+            //return;
         }
 
 
@@ -127,6 +127,7 @@ class btldr {
             this.pc=0;
             this.send_info('\r\nERROR: Bootloader not responding');
             this.boot_cmd(0x3B,[]);
+			this.state_cb('not responding');
             return;
         }
 
@@ -136,6 +137,7 @@ class btldr {
             this.pc=0;
             this.send_info('\r\nINFO: Programming done');
             this.boot_cmd(0x3B,[]);
+			this.state_cb('finished');
             return;
         }
         progress.percent_done = Math.floor((100.0 / (this.cyacd_arr.array_id.length-1)) * this.pc);
@@ -145,43 +147,19 @@ class btldr {
     }
 
 
-    receive(info){
-        if(info.socketId==this.socket) {
-            let buf = new Uint8Array(info.data);
-            switch(this.last_command){
-                case 0x38:
-                    this.boot_decode_enter(buf);
-                    if(this.chip_id!='') this.ldr_conn=true;
-                    console.log(this.chip_id);
-                    break;
-                case 0x39:
-                    if(buf[1]!=0) {
-                        console.log('ERROR: Error at Row: ' + this.pc);
-                    }
-                    break;
-            }
-
-            this.last_command=0x00;
-        }
-    }
-
-    callback_sent(info){
-
-    }
-
     boot_cmd(command , data){
         if(this.connected == false){
             return
         }
-        let buffer = new Uint8Array(data.length+7);
-
+        //let buffer = new Uint8Array(data.length+7);
+		let buffer = [];
         let sum = 0;
         let size = buffer.length-3;
 
         buffer[0] = 0x01;
         buffer[1] = command;
-        buffer[2] = data.length;
-        buffer[3] = data.length>>8;
+        buffer[2] = data.length & 0xFF;
+        buffer[3] = (data.length>>8) & 0xFF;
         let dat_cnt = 4;
         for(let i=0;i<data.length;i++){
             buffer[dat_cnt] = data[i];
@@ -194,14 +172,13 @@ class btldr {
             size--;
         }
         let crc = (1 + (~sum)) & 0xFFFF;
-        buffer[dat_cnt] = crc;
+        buffer[dat_cnt] = crc & 0xFF;
         dat_cnt++;
-        buffer[dat_cnt] = crc >> 8;
+        buffer[dat_cnt] = (crc >> 8) &0xFF;
         dat_cnt++;
         buffer[dat_cnt] = 0x17;
         this.last_command=command;
-        chrome.sockets.tcp.send(this.socket, buffer, (info) => this.callback_sent(info));
-        //return buffer;
+		this.write(buffer);
         return;
     }
 

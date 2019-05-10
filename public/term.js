@@ -40,14 +40,21 @@ let busControllable = false;
 let transientActive = false;
 
 var uitime = setInterval(refresh_UI, 20);
-//const scripting = require('./term_scripting');
 let currentScript = null;
 var ontimeUI = {totalVal: 0, relativeVal: 100, absoluteVal: 0};
 
 var term_scope;
 
 
-var ldr = new btldr('192.168.50.249', 666);
+var ldr = new btldr((data)=> {
+		wsocket.emit('trans message', data);
+	},
+	(state)=> {
+		if(state=='not responding' || state=='finished'){
+			wsocket.emit('ctl message', 'transparent=0');
+		}
+	}
+);
 
 ldr.set_info_cb((str) => terminal.io.println(str));
 ldr.set_progress_cb((info) => progress_cb(info));
@@ -157,7 +164,7 @@ function refresh_UI(){
 	
 	if(sid_state==2 && flow_ctl==1){
 		if(connected==1){
-			wsocket.emit('message', sid_file_marked.slice(frame_cnt_old,frame_cnt));
+			wsocket.emit('midi message', sid_file_marked.slice(frame_cnt_old,frame_cnt));
 			//console.log(sid_file_marked.slice(frame_cnt_old,frame_cnt));
 			frame_cnt_old=frame_cnt;
 			frame_cnt+=byt;
@@ -460,24 +467,6 @@ function updateSliderAvailability() {
 	ontimeUI.slider.className = onDisable?"slider-gray":"slider";
 }
 
-
-
-
-function bootload(){
-
-	ldr.connect();
-	//let ui = boot_cmd(0x38,[]);
-	//chrome.sockets.tcp.send(socket, ui, sendtel);
-
-}
-
-function load(){
-	ldr.boot_cmd(0x38,[]);
-}
-
-
-
-
 function receive(info){
 	/*
 	if(info.socketId==socket_midi){
@@ -551,18 +540,6 @@ function receive(info){
 receive.buffer = [];
 receive.bytes_done = 0;
 
-function connected_cb(connectionInfo){
-	if(connectionInfo.connectionId){
-		terminal.io.println("connected");
-		connid = connectionInfo.connectionId;
-		connected = 2;
-		w2ui['toolbar'].get('connect').text = 'Disconnect';
-		w2ui['toolbar'].refresh();
-		start_conf();	
-	} else {
-		terminal.io.println("failed!");
-	}
-}
 
 function start_conf(){
 	send_command('\r');
@@ -571,33 +548,7 @@ function start_conf(){
 	send_command('kill reset\rtterm start\rcls\r');
 }
 
-function getdevs(devices){
-   for (var i = 0; i < devices.length; i++) {
-	   if((devices[i].displayName && devices[i].displayName.indexOf("STMBL") > -1) || (devices[i].vendorId && devices[i].vendorId == 1204 && devices[i].productId && devices[i].productId == 62002)){
-		path = devices[i].path;
-        terminal.io.println("Connecting to " + devices[i].path);
-        //chrome.serial.connect(devices[i].path, connected_cb);
-        return;
-      }
-      terminal.io.println(devices[i].path + ' ' + devices[i].displayName + ' ' + devices[i].vendorId + ' ' + devices[i].productId );
-   }
-   
-   var test = w2ui['toolbar'].get('port');
-   
-   if(test.value){
-		terminal.io.println('UD3 not found connect to: '+ test.value);
-		//chrome.serial.connect(test.value, connected_cb);
-   }else{
-	   terminal.io.println('No COM specified trying COM12');
-	   //chrome.serial.connect('COM12', connected_cb);
-   }
-   
 
-}
-
-function disconnected_cb(){
-	terminal.io.println('\r\nDisconnected');
-}
 
 const wsocket = new io();
 wsocket.on('connect', () => {
@@ -610,27 +561,11 @@ wsocket.on('message', (data) => {
 
 
 
-function disconnected_cb_tel(){
-	//chrome.sockets.tcp.close(socket,function clb(){});
-	terminal.io.println('\r\nDisconnected');
-}
-
-function disconnected_cb_midi(){
-	//chrome.sockets.tcp.close(socket_midi,function clb(){});
-}
-
-function error(info){
-	terminal.io.println(info.error);
-	//disconnect();
-}
-
-
 function clear(){
 	terminal.io.print('\033[2J\033[0;0H');
 	send_command('cls\r');
 
 }
-
 
 
 function send_command(command){
@@ -683,17 +618,7 @@ function event_read_ini(ev){
         return inicontent;
     });
 	
-	
-	if(simpleIni.general.port){
-		
-		w2ui['toolbar'].get('port').value = simpleIni.get('general.port');
-		
-		w2ui['toolbar'].refresh();
-   }
-   if(simpleIni.general.autoconnect=="true"){
-	   connect();
-   }
-   
+  
 }
 
 function loadMidiFile(file) {
@@ -747,8 +672,6 @@ function event_read_SID(progressEvent){
 function startCurrentMidiFile() {
 	midi_state.state = 'playing';
 	Player.play();
-	//nano_led(simpleIni.nano.play,1);
-	//nano_led(simpleIni.nano.stop,0);
 	term_scope.redrawTop();
 }
 
@@ -1043,11 +966,9 @@ document.addEventListener('DOMContentLoaded', function () {
 					send_command('config_get\r');
 					break;
                 case 'mnu_command:bootloader':
-                	if(connected!=0) {
-                        send_command('bootloader\r');
-                        connect();
-                    }
-                    setTimeout(() => bootload(), 500);
+                    send_command('bootloader\r');
+					wsocket.emit('ctl message', 'transparent=1');
+                    setTimeout(() => ldr.connect(), 500);
                     break;
 				case 'mnu_command:Load EEPROM-Config':
 					warn_eeprom_load();

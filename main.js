@@ -4,14 +4,6 @@ var telemetry = new tt();
 
 
 
-
-
-
-
-
-
-	
-
 var yargs = require('yargs');
 var mqtt = require('mqtt');
 var mqtt_client;
@@ -19,6 +11,8 @@ var mqtt_client;
 var wd_timer;
 var loop_timer;
 var port_reopen_timer;
+
+var transparent_id=-1;
 
 var num_con = 3;
 
@@ -140,6 +134,8 @@ if(argv.ws)	{
 	io.sockets.on('connection', (socket) => {
 	console.log("New websocket connection from " + socket.id);
     clients.push(socket);
+	
+	
 	socket.on('message', (data) => {
 	  minsvc.min_queue_frame(clients.indexOf(socket),data);
 	  console.log(data);
@@ -148,10 +144,30 @@ if(argv.ws)	{
 		minsvc.min_queue_frame(MIN_ID_MIDI,data);
 		console.log(data);
 	});
+	socket.on('trans message', (data) => {
+		if(!port.writable) return;
+		console.log(data);
+		port.write(data);
+	});
+	socket.on('ctl message', (data) => {
+		switch(data){
+			case 'transparent=1':
+			stop_timers();
+			transparent_id = clients.indexOf(socket);
+			console.log('Transparent mode enabled');
+			break;
+			case 'transparent=0':
+			start_timers();
+			transparent_id=-1;
+			console.log('Transparent mode disabled');
+			break;
+		}
+	});
 	socket.on('disconnect', function () {
 		console.log("Websocket connection closed from " + socket.id);
 		clients.splice(clients.indexOf(socket), 1);
     });
+	
 });
 	
 }
@@ -276,7 +292,7 @@ minsvc.handler = (id,data) => {
         for(let i=0;i<midi_clients.length;i++){
             if(typeof clients[id].emit == 'function'){
 				console.log(data);
-				clients[id].emit('message', data);
+				clients[id].emit('midi message', data);
 			}else{
 				clients[id].write(buf);
 			}
@@ -290,22 +306,35 @@ function start_mqtt_telemetry(){
 	minsvc.min_queue_frame(num_con+1,rBuffer);
 }
 
+function start_timers(){
+	loop_timer = setInterval(loop, 5);
+	wd_timer = setInterval(wd_reset, 80);
+}
+
+function stop_timers(){
+	clearInterval(loop_timer);
+	clearInterval(wd_timer);
+}
 
 port.on('open', function() {
-  loop_timer = setInterval(loop, 5);
-  wd_timer = setInterval(wd_reset, 80);
-  console.log("Opened serial port " + argv.port + " at " + argv.baudrate + " baud");
+	start_timers();
+	console.log("Opened serial port " + argv.port + " at " + argv.baudrate + " baud");
 
   //console.log(port);
-  if(argv.mqtt){
-	  telemetry.cbGaugeValue = gaugeValChange;
-	  start_mqtt_telemetry();
-  }
+	if(argv.mqtt){
+		telemetry.cbGaugeValue = gaugeValChange;
+		start_mqtt_telemetry();
+	}
 });
 
 // Switches the port into "flowing mode"
 port.on('data', function (data) {
-   	minsvc.min_poll(data);
+	if(transparent_id>-1){
+		clients[id].emit('trans message', data);
+		clients[transparent_id].emit('trans message', data);
+	}else{
+		minsvc.min_poll(data);
+	}
 });
 
 // Switches the port into "flowing mode"
@@ -318,7 +347,6 @@ port.on('close', function (err) {
 	}, 200);
 });
 
-var cnt=0
 function loop(){
    minsvc.min_poll();
  
