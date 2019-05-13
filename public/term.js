@@ -557,7 +557,9 @@ wsocket.on('connect', () => {
 wsocket.on('message', (data) => {
       receive(data);
     });	
-
+wsocket.on('trans message', (data) => {
+      ldr.read(data);
+    });	
 
 
 
@@ -966,7 +968,7 @@ document.addEventListener('DOMContentLoaded', function () {
 					send_command('config_get\r');
 					break;
                 case 'mnu_command:bootloader':
-                    send_command('bootloader\r');
+                    //send_command('bootloader\r');
 					wsocket.emit('ctl message', 'transparent=1');
                     setTimeout(() => ldr.connect(), 500);
                     break;

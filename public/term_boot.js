@@ -89,12 +89,13 @@ class btldr {
             this.send_info('INFO: Not connected too bootloader... exit');
             return;
         }
+        console.log('ID: ' + this.chip_id);
 
         if(this.cyacd_chip_id==this.chip_id){
             this.send_info('INFO: Chip-ID matches, start programming of flash');
         }else{
             this.send_info('INFO: Chip-ID match failed... exit');
-            //return;
+            return;
         }
 
 
@@ -152,29 +153,29 @@ class btldr {
             return
         }
         //let buffer = new Uint8Array(data.length+7);
-		let buffer = [];
+		let buffer = new Array(data.length+7)
         let sum = 0;
-        let size = buffer.length-3;
 
         buffer[0] = 0x01;
         buffer[1] = command;
         buffer[2] = data.length & 0xFF;
-        buffer[3] = (data.length>>8) & 0xFF;
+        buffer[3] = (data.length>>>8) & 0xFF;
         let dat_cnt = 4;
         for(let i=0;i<data.length;i++){
             buffer[dat_cnt] = data[i];
             dat_cnt++;
         }
-
+        let size = buffer.length-3;
         while (size > 0)
         {
             sum += buffer[size - 1];
             size--;
         }
+        
         let crc = (1 + (~sum)) & 0xFFFF;
         buffer[dat_cnt] = crc & 0xFF;
         dat_cnt++;
-        buffer[dat_cnt] = (crc >> 8) &0xFF;
+        buffer[dat_cnt] = (crc >>> 8) &0xFF;
         dat_cnt++;
         buffer[dat_cnt] = 0x17;
         this.last_command=command;

@@ -138,15 +138,15 @@ if(argv.ws)	{
 	
 	socket.on('message', (data) => {
 	  minsvc.min_queue_frame(clients.indexOf(socket),data);
-	  console.log(data);
+	  //console.log(data);
 	});
 	socket.on('midi message', (data) => {
 		minsvc.min_queue_frame(MIN_ID_MIDI,data);
-		console.log(data);
+		//console.log(data);
 	});
 	socket.on('trans message', (data) => {
 		if(!port.writable) return;
-		console.log(data);
+		console.log('Send: ' + data);
 		port.write(data);
 	});
 	socket.on('ctl message', (data) => {
@@ -279,7 +279,7 @@ minsvc.handler = (id,data) => {
     let buf = new Buffer.from(data);
 	if(id <= num_con-1 && clients.length > id){
 		if(typeof clients[id].emit == 'function'){
-			console.log(data);
+			//console.log(data);
 			clients[id].emit('message', data);
 		}else{
 			clients[id].write(buf);
@@ -291,7 +291,7 @@ minsvc.handler = (id,data) => {
     if(id==MIN_ID_MIDI){
         for(let i=0;i<midi_clients.length;i++){
             if(typeof clients[id].emit == 'function'){
-				console.log(data);
+				//console.log(data);
 				clients[id].emit('midi message', data);
 			}else{
 				clients[id].write(buf);
@@ -330,8 +330,10 @@ port.on('open', function() {
 // Switches the port into "flowing mode"
 port.on('data', function (data) {
 	if(transparent_id>-1){
-		clients[id].emit('trans message', data);
 		clients[transparent_id].emit('trans message', data);
+       for(let i=0;i<data.length;i++){
+        console.log('Rec: ' + data[i].toString(16));   
+       }
 	}else{
 		minsvc.min_poll(data);
 	}
