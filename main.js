@@ -130,11 +130,11 @@ if(argv.ws)	{
 			});
 		  }
 	}
-	
+    
 	io.sockets.on('connection', (socket) => {
 	console.log("New websocket connection from " + socket.id);
     clients.push(socket);
-	
+	send_min_socket(clients.indexOf(socket), 'Websocket', true);
 	
 	socket.on('message', (data) => {
 	  minsvc.min_queue_frame(clients.indexOf(socket),data);
@@ -165,6 +165,7 @@ if(argv.ws)	{
 	});
 	socket.on('disconnect', function () {
 		console.log("Websocket connection closed from " + socket.id);
+        send_min_socket(clients.indexOf(socket), 'Websocket', false);
 		clients.splice(clients.indexOf(socket), 1);
     });
 	
@@ -308,7 +309,7 @@ function start_mqtt_telemetry(){
 
 function start_timers(){
 	loop_timer = setInterval(loop, 5);
-	wd_timer = setInterval(wd_reset, 80);
+	wd_timer = setInterval(wd_reset, 200);
 }
 
 function stop_timers(){
@@ -356,7 +357,7 @@ function loop(){
 
 function wd_reset(){
    if(clients.length>0){
-	   //minsvc.min_queue_frame(MIN_ID_WD,[]);
+	   minsvc.min_queue_frame(MIN_ID_WD,[]);
    }
 }
 

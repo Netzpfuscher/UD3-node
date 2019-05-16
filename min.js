@@ -435,7 +435,7 @@ module.exports = class minprot{
             let remote_connected = (this.now - this.transport_fifo.last_received_anything_ms < this.TRANSPORT_IDLE_TIMEOUT_MS);
             let remote_active = (this.now - this.transport_fifo.last_received_frame_ms < this.TRANSPORT_IDLE_TIMEOUT_MS);
   
-            //if(!remote_connected) this.min_transport_reset(true);
+            if(!remote_connected) this.min_transport_reset(true);
             
             // This sends one new frame or resends one old frame
 
