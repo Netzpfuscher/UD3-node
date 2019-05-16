@@ -83,6 +83,7 @@ if(argv.ws)	{
 	let mimeTypes = {
 	  '.html': 'text/html',
 	  '.css': 'text/css',
+	  '.ini': 'text/plain',
 	  '.js': 'text/javascript',
 	  '.jpg': 'image/jpeg',
 	  '.png': 'image/png',
@@ -133,27 +134,37 @@ if(argv.ws)	{
     
 	io.sockets.on('connection', (socket) => {
 	console.log("New websocket connection from " + socket.id);
-    clients.push(socket);
-	send_min_socket(clients.indexOf(socket), 'Websocket', true);
-	
+	let sck_num=search_slot();
+	if(sck_num==-1){
+		console.log("Too many connections");
+		return;
+	}
+    clients[sck_num]=socket;
+	send_min_socket(sck_num, 'Websocket', true);
+
 	socket.on('message', (data) => {
-	  minsvc.min_queue_frame(clients.indexOf(socket),data);
-	  //console.log(data);
+		let sck_num=search_slot();
+		if(sck_num==-1) return;
+		minsvc.min_queue_frame(sck_num,data);
 	});
+	
 	socket.on('midi message', (data) => {
 		minsvc.min_queue_frame(MIN_ID_MIDI,data);
-		//console.log(data);
 	});
+	
 	socket.on('trans message', (data) => {
 		if(!port.writable) return;
 		console.log('Send: ' + data);
 		port.write(data);
 	});
+	
 	socket.on('ctl message', (data) => {
 		switch(data){
 			case 'transparent=1':
 			stop_timers();
-			transparent_id = clients.indexOf(socket);
+			let sck_num=search_slot();
+			if(sck_num==-1) return;
+			transparent_id = sck_num;
 			console.log('Transparent mode enabled');
 			break;
 			case 'transparent=0':
@@ -165,8 +176,10 @@ if(argv.ws)	{
 	});
 	socket.on('disconnect', function () {
 		console.log("Websocket connection closed from " + socket.id);
-        send_min_socket(clients.indexOf(socket), 'Websocket', false);
-		clients.splice(clients.indexOf(socket), 1);
+        let sck_num=search_socket(socket);
+		if(sck_num==-1) return;
+		send_min_socket(sck_num, 'Websocket', false);
+		clients[sck_num]=null;
     });
 	
 });
@@ -174,6 +187,19 @@ if(argv.ws)	{
 }
 
 
+function search_slot(){
+	for(let i=0;i<clients.length;i++){
+		if(clients[i]==null) return i;
+	}
+	return -1;
+}
+
+function search_socket(socket){
+	for(let i=0;i<clients.length;i++){
+		if(clients[i]==socket) return i;
+	}
+	return -1;
+}
 
 const SerialPort = require('serialport')
 var minsvc = new min();
@@ -218,25 +244,36 @@ function send_min_socket(num, info, connect){
 
 console.log("Bind telnet server to " + argv.ts);
 server.listen(parseInt(argv.ts),'0.0.0.0');
-let clients = [];
+let clients = Array(num_con);
+for(let i=0;i<num_con;i++){
+	clients[i]=null;
+}
+
+console.log(clients);
 server.on('connection', function(sock) {
     console.log('CONNECTED telnet: ' + sock.remoteAddress + ':' + sock.remotePort);
-	if(clients.length>=num_con){
-		console.log('ERROR: Max number of clients connected');
+	let sck_num = search_slot();
+	if(sck_num==-1){
+		console.log("Too many connections");
 		sock.destroy();
 		return;
 	}
-    clients.push(sock);
-	send_min_socket(clients.indexOf(sock), sock.remoteAddress, true);
+    clients[sck_num]=sock;
+	send_min_socket(sck_num, sock.remoteAddress, true);
+	
     sock.on('data', function(data) {
         //console.log('DATA ' + sock.remoteAddress + ': ' + data);
         let rawBuffer = Buffer.from(data,'binary');
-        minsvc.min_queue_frame(clients.indexOf(sock),rawBuffer);
+		let sck_num = search_slot();
+		if(sck_num==-1) return;
+        minsvc.min_queue_frame(sck_num,rawBuffer);
     });
 	sock.on('close',  function () {
 		console.log('CLOSED: ' + sock.remoteAddress  + ':' + sock.remotePort);
-		send_min_socket(clients.indexOf(sock), sock.remoteAddress, false);
-		clients.splice(clients.indexOf(sock), 1);
+		let sck_num = search_slot();
+		if(sck_num==-1) return;
+		send_min_socket(sck_num, sock.remoteAddress, false);
+		clients[sck_num]=null;
 	});
 });
 
@@ -332,9 +369,9 @@ port.on('open', function() {
 port.on('data', function (data) {
 	if(transparent_id>-1){
 		clients[transparent_id].emit('trans message', data);
-       for(let i=0;i<data.length;i++){
-        console.log('Rec: ' + data[i].toString(16));   
-       }
+       //for(let i=0;i<data.length;i++){
+       // console.log('Rec: ' + data[i].toString(16));   
+       //}
 	}else{
 		minsvc.min_poll(data);
 	}
@@ -357,7 +394,7 @@ function loop(){
 
 function wd_reset(){
    if(clients.length>0){
-	   minsvc.min_queue_frame(MIN_ID_WD,[]);
+	  // minsvc.min_queue_frame(MIN_ID_WD,[]);
    }
 }
 

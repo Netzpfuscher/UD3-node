@@ -553,6 +553,7 @@ function start_conf(){
 const wsocket = new io();
 wsocket.on('connect', () => {
       terminal.io.println("Connected to Websocket");
+	  start_conf();
     });
 wsocket.on('message', (data) => {
       receive(data);
@@ -583,29 +584,27 @@ function readmidi(file){
 }
 var simpleIni;
 
-function readini(file){
-	/*
-	chrome.runtime.getPackageDirectoryEntry(function(root) {
-	root.getFile("config.ini", {}, function(fileEntry) {
-    fileEntry.file(function(file) {
-      var reader = new FileReader();
-      reader.onloadend = event_read_ini;
-      reader.readAsText(file);
-    }, errorHandler);
-  }, errorHandler);
-});*/
-
-
-	/*
-	var fs = new FileReader();
-	fs.readAsArrayBuffer(file);
-	fs.onload = event_read_ini;
-	*/
+function readTextFile(file)
+{     
+     var rawFile = new XMLHttpRequest();
+     rawFile.open("GET", file, true);
+     rawFile.onreadystatechange = function ()
+     {
+         if(rawFile.readyState === 4)
+         {
+             if(rawFile.status === 200 || rawFile.status == 0)
+             {
+		 
+				simpleIni = new SimpleIni(function() { 
+        			return rawFile.responseText;
+				 });
+             }
+         }
+     }  
+	 rawFile.send(null); 
 }
 
-function errorHandler(result){
-	
-}
+
 
 function event_read_midi(progressEvent){
 
@@ -613,15 +612,6 @@ function event_read_midi(progressEvent){
 
 }
 
-
-function event_read_ini(ev){
-	var inicontent=this.result;
-	simpleIni = new SimpleIni(function() { 
-        return inicontent;
-    });
-	
-  
-}
 
 function loadMidiFile(file) {
 	w2ui['toolbar'].get('mnu_midi').text = 'MIDI-File: '+file.name;
@@ -1109,7 +1099,7 @@ document.addEventListener('DOMContentLoaded', function () {
 		}
 	};
 	
-	readini("config.ini");
+	readTextFile('config.ini');
 	
 		
     ctx = document.getElementById("wavecanvas").getContext('2d');
