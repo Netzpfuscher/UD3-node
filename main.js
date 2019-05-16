@@ -143,7 +143,7 @@ if(argv.ws)	{
 	send_min_socket(sck_num, 'Websocket', true);
 
 	socket.on('message', (data) => {
-		let sck_num=search_slot();
+		let sck_num=search_socket(socket);
 		if(sck_num==-1) return;
 		minsvc.min_queue_frame(sck_num,data);
 	});
@@ -159,15 +159,16 @@ if(argv.ws)	{
 	});
 	
 	socket.on('ctl message', (data) => {
+        let sck_num=search_socket(socket);
 		switch(data){
 			case 'transparent=1':
 			stop_timers();
-			let sck_num=search_slot();
 			if(sck_num==-1) return;
 			transparent_id = sck_num;
 			console.log('Transparent mode enabled');
 			break;
 			case 'transparent=0':
+            send_min_socket(sck_num, 'Websocket', true);
 			start_timers();
 			transparent_id=-1;
 			console.log('Transparent mode disabled');
@@ -248,8 +249,6 @@ let clients = Array(num_con);
 for(let i=0;i<num_con;i++){
 	clients[i]=null;
 }
-
-console.log(clients);
 server.on('connection', function(sock) {
     console.log('CONNECTED telnet: ' + sock.remoteAddress + ':' + sock.remotePort);
 	let sck_num = search_slot();
@@ -264,13 +263,14 @@ server.on('connection', function(sock) {
     sock.on('data', function(data) {
         //console.log('DATA ' + sock.remoteAddress + ': ' + data);
         let rawBuffer = Buffer.from(data,'binary');
-		let sck_num = search_slot();
+		let sck_num = search_socket(sock);
 		if(sck_num==-1) return;
+        console.log("SCK:" + sck_num);
         minsvc.min_queue_frame(sck_num,rawBuffer);
     });
 	sock.on('close',  function () {
 		console.log('CLOSED: ' + sock.remoteAddress  + ':' + sock.remotePort);
-		let sck_num = search_slot();
+		let sck_num = search_socket(sock);
 		if(sck_num==-1) return;
 		send_min_socket(sck_num, sock.remoteAddress, false);
 		clients[sck_num]=null;
@@ -315,17 +315,22 @@ minsvc.sendByte = (data) => {
 
 minsvc.handler = (id,data) => {
     let buf = new Buffer.from(data);
-	if(id <= num_con-1 && clients.length > id){
-		if(typeof clients[id].emit == 'function'){
-			//console.log(data);
-			clients[id].emit('message', data);
-		}else{
-			clients[id].write(buf);
+    //console.log("y"+buf);
+	if(clients.length >= id){
+        
+		if(clients[id] != null){
+            if(typeof clients[id].write != 'function'){
+                clients[id].emit('message', data);
+                
+            }else{
+                clients[id].write(buf);
+            }
+            
 		}
-	}
+	}/*
 	if(id==num_con){
 		telemetry.receive(data);
-	}
+	}*/
     if(id==MIN_ID_MIDI){
         for(let i=0;i<midi_clients.length;i++){
             if(typeof clients[id].emit == 'function'){
@@ -394,7 +399,7 @@ function loop(){
 
 function wd_reset(){
    if(clients.length>0){
-	  // minsvc.min_queue_frame(MIN_ID_WD,[]);
+	  minsvc.min_queue_frame(MIN_ID_WD,[]);
    }
 }
 

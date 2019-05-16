@@ -696,7 +696,17 @@ function ondrop(e){
 		}else if (extension=="dmp") {
 			loadSIDFile(file);
 		}else if (extension=="cyacd") {
-			ldr.cyacd(file);
+            send_command('\rbootloader\r');
+            setTimeout(() => {
+                wsocket.emit('ctl message', 'transparent=1');
+                setTimeout(() => {
+                    ldr.connect();
+                    setTimeout(() => {
+                        ldr.cyacd(file);
+                    }, 500); 
+                }, 500);   
+            }, 1000);
+			
         }
    }
 }

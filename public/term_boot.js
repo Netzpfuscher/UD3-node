@@ -30,6 +30,7 @@ class btldr {
 				break;
 			case 0x39:
 				if(buf[1]!=0) {
+                    //console.log(buf);
 					console.log('ERROR: Error at Row: ' + this.pc);
 				}
 				break;
@@ -86,7 +87,7 @@ class btldr {
         this.send_info('INFO: Cyacd loaded, found chip-ID: ' + this.cyacd_chip_id);
 
         if(this.connected==false){
-            this.send_info('INFO: Not connected too bootloader... exit');
+            this.send_info('INFO: Not connected to bootloader... exit');
             return;
         }
         console.log('ID: ' + this.chip_id);
@@ -179,6 +180,7 @@ class btldr {
         dat_cnt++;
         buffer[dat_cnt] = 0x17;
         this.last_command=command;
+        console.log(buffer);
 		this.write(buffer);
         return;
     }
