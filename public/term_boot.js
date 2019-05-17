@@ -119,7 +119,7 @@ class btldr {
             cnt++;
         }
         this.pc=0;
-        this.time = setInterval(() => this.protmr(), 40);
+        this.time = setInterval(() => this.protmr(), 200);
     }
 
     protmr(){
