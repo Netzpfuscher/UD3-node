@@ -19,27 +19,48 @@ class btldr {
         this.progress_cb=null;
 		this.write=write_cb;
 		this.state_cb=state_cb;
+        this.byte_pos=0;
+        this.chunk_size=128;
+        this.receive_buffer=[];
     }
 
 	read(data){
-		let buf = new Uint8Array(data);
-		switch(this.last_command){
-			case 0x38:
-				this.boot_decode_enter(buf);
-				console.log(this.chip_id);
-				break;
-			case 0x39:
-				if(buf[1]!=0) {
-                    //console.log(buf);
-					console.log('ERROR: Error at Row: ' + this.pc);
-				}
-				break;
-		}
-
-		this.last_command=0x00; 
+        let temp = new Uint8Array(data);
+        
+        for(let i=0;i<temp.length;i++){
+           this.receive_buffer.push(temp[i]);
+           if(this.receive_buffer.length>6 && temp[i] == 0x17){
+               	let buf = new Uint8Array(this.receive_buffer);
+                switch(this.last_command){
+                    case 0x38:
+                        this.boot_decode_enter(buf);
+                        console.log(this.chip_id);
+                        break;
+                    case 0x39:
+                        if(buf[1]!=0) {
+                            console.log('ERROR: Error at Row: ' + this.pc);
+                        }else{
+                            this.last_command=0x00;
+                            this.time = setTimeout(() => this.protmr(), 5);
+                        }
+                        break;
+                    case 0x37:
+                        if(buf[1]!=0) {
+                            console.log('ERROR: Error at Row: ' + this.pc);
+                        }else{
+                            this.last_command=0x00;
+                            this.time = setTimeout(() => this.protmr(), 5);
+                        }
+                        break;
+                }
+                this.receive_buffer=[];
+                this.last_command=0x00;      
+           }
+        }
 	}
 	
     connect(){
+        this.receive_buffer=[];
         this.boot_cmd(0x38,[]);
     }
 
@@ -59,6 +80,7 @@ class btldr {
         fs.onload = (ev) => this.cyacd_loaded(ev);
     }
 
+    
     programm(array, row, data){
         if(data.length==0) return;
         let buf = new Uint8Array(data.length+3);
@@ -119,13 +141,14 @@ class btldr {
             cnt++;
         }
         this.pc=0;
-        this.time = setInterval(() => this.protmr(), 200);
+        //this.time = setInterval(() => this.protmr(), 100);
+        this.protmr();
     }
 
     protmr(){
         let progress = [];
         if(this.last_command!=0x00 && this.pc != 0){
-            clearInterval(this.time);
+            //clearInterval(this.time);
             this.pc=0;
             this.send_info('\r\nERROR: Bootloader not responding');
             this.boot_cmd(0x3B,[]);
@@ -135,17 +158,39 @@ class btldr {
 
         if(this.pc==this.cyacd_arr.array_id.length){
             this.last_command=0x00;
-            clearInterval(this.time);
+            //clearInterval(this.time);
             this.pc=0;
             this.send_info('\r\nINFO: Programming done');
             this.boot_cmd(0x3B,[]);
 			this.state_cb('finished');
             return;
         }
+        let temp = this.cyacd_arr.byte[this.pc];
         progress.percent_done = Math.floor((100.0 / (this.cyacd_arr.array_id.length-1)) * this.pc);
-        this.programm(this.cyacd_arr.array_id[this.pc], this.cyacd_arr.row[this.pc], this.cyacd_arr.byte[this.pc]);
-        this.pc++;
-        this.progress_cb(progress);
+        if(this.byte_pos<(temp.length-this.chunk_size)){
+            let data = new Uint8Array(this.chunk_size);
+            for(let i=0;i<this.chunk_size;i++){
+                data[i] = temp[this.byte_pos];
+                this.byte_pos++;
+            }
+            this.boot_cmd(0x37, data);
+        }else{
+            
+            
+            let len=this.cyacd_arr.byte[this.pc].length-this.byte_pos;
+            let data = new Uint8Array(len);
+            for(let i=0;i<len;i++){
+               data[i] = temp[this.byte_pos];
+               this.byte_pos++;
+            }
+
+            this.programm(this.cyacd_arr.array_id[this.pc], this.cyacd_arr.row[this.pc], data);
+            this.byte_pos=0;
+            this.pc++;
+            this.progress_cb(progress);
+        }
+        
+
     }
 
 
@@ -156,7 +201,6 @@ class btldr {
         //let buffer = new Uint8Array(data.length+7);
 		let buffer = new Array(data.length+7)
         let sum = 0;
-
         buffer[0] = 0x01;
         buffer[1] = command;
         buffer[2] = data.length & 0xFF;
@@ -180,7 +224,6 @@ class btldr {
         dat_cnt++;
         buffer[dat_cnt] = 0x17;
         this.last_command=command;
-        console.log(buffer);
 		this.write(buffer);
         return;
     }

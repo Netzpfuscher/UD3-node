@@ -154,7 +154,7 @@ if(argv.ws)	{
 	
 	socket.on('trans message', (data) => {
 		if(!port.writable) return;
-		console.log('Send: ' + data.length);
+		//console.log('Send: ' + data.length);
         port.write(data);
 	});
 	
@@ -374,9 +374,9 @@ port.on('open', function() {
 port.on('data', function (data) {
 	if(transparent_id>-1){
 		clients[transparent_id].emit('trans message', data);
-       for(let i=0;i<data.length;i++){
-        console.log('Rec: ' + data[i].toString(16));   
-       }
+       //for(let i=0;i<data.length;i++){
+        //console.log('Rec: ' + data[i].toString(16));   
+       //}
 	}else{
 		minsvc.min_poll(data);
 	}
