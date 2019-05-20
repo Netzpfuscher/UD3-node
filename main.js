@@ -266,7 +266,6 @@ server.on('connection', function(sock) {
         let rawBuffer = Buffer.from(data,'binary');
 		let sck_num = search_socket(sock);
 		if(sck_num==-1) return;
-        console.log("SCK:" + sck_num);
         minsvc.min_queue_frame(sck_num,rawBuffer);
     });
 	sock.on('close',  function () {
@@ -316,7 +315,6 @@ minsvc.sendByte = (data) => {
 
 minsvc.handler = (id,data) => {
     let buf = new Buffer.from(data);
-    //console.log("y"+buf);
 	if(clients.length >= id){
         
 		if(clients[id] != null){
@@ -328,22 +326,22 @@ minsvc.handler = (id,data) => {
             }
             
 		}
-	}/*
-	if(id==num_con){
-		telemetry.receive(data);
-	}*/
+	}
+
     if(id==MIN_ID_MIDI){
         
         for(let i=0;i<clients.length;i++){
             if(clients[i] != null){
-                //if(typeof clients[i].write != 'function'){
+                if(typeof clients[i].write != 'function'){
                     //console.log(data);
                     clients[i].emit('midi message', data);
-               // }else{
-               //     clients[i].write(buf);
-               // }
+                }
             }
         }
+        for(let i=0;i<midi_clients.length;i++){
+            midi_clients[i].write(buf);
+        }
+        
     }
 }
 
@@ -355,7 +353,7 @@ function start_mqtt_telemetry(){
 
 function start_timers(){
 	loop_timer = setInterval(loop, 2);
-	wd_timer = setInterval(wd_reset, 200);
+	wd_timer = setInterval(wd_reset, 500);
 }
 
 function stop_timers(){
@@ -367,7 +365,6 @@ port.on('open', function() {
 	start_timers();
 	console.log("Opened serial port " + argv.port + " at " + argv.baudrate + " baud");
 
-  //console.log(port);
 	if(argv.mqtt){
 		telemetry.cbGaugeValue = gaugeValChange;
 		start_mqtt_telemetry();
@@ -403,7 +400,7 @@ function loop(){
 
 function wd_reset(){
    if(clients.length>0){
-	//  minsvc.min_queue_frame(MIN_ID_WD,[]);
+	  //minsvc.min_queue_frame(MIN_ID_WD,[]);
    }
 }
 
