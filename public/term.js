@@ -163,9 +163,16 @@ function refresh_UI(){
 	meters.refresh();
 	
 	if(sid_state==2 && flow_ctl==1){
-		if(connected==1){
+		if(connected==1){/*
+            let buf =[];
+            for(let i=frame_cnt_old;i<=frame_cnt;i++){
+                buf[i]=sid_file_marked[i];
+            }
+            console.log(buf.length);*/
 			wsocket.emit('midi message', sid_file_marked.slice(frame_cnt_old,frame_cnt));
+            //wsocket.emit('midi message',buf);
 			//console.log(sid_file_marked.slice(frame_cnt_old,frame_cnt));
+            //console.log('send');
 			frame_cnt_old=frame_cnt;
 			frame_cnt+=byt;
 			if(frame_cnt>sid_file_marked.byteLength){
@@ -552,6 +559,7 @@ function start_conf(){
 
 const wsocket = new io();
 wsocket.on('connect', () => {
+        connected=1;
       terminal.io.println("Connected to Websocket");
 	  start_conf();
     });
@@ -561,7 +569,15 @@ wsocket.on('message', (data) => {
 wsocket.on('trans message', (data) => {
       ldr.read(data);
     });	
+wsocket.on('midi message', (data) => {
 
+		if(data[0]==0x78){
+			flow_ctl=0;
+		}
+		if(data[0]==0x6f){
+			flow_ctl=1;
+		}
+    });	
 
 
 function clear(){
@@ -636,7 +652,8 @@ var sid_file_marked;
 var sid_state=0;
 function event_read_SID(progressEvent){
 	var cnt=0;
-	var sid_file = new Uint8Array(progressEvent.srcElement.result.byteLength + ((progressEvent.srcElement.result.byteLength/25)*4));
+    var sid_file = new Array(progressEvent.srcElement.result.byteLength + ((progressEvent.srcElement.result.byteLength/25)*4));
+	//var sid_file = new Uint8Array(progressEvent.srcElement.result.byteLength + ((progressEvent.srcElement.result.byteLength/25)*4));
 	var source_cnt=0;
 	var file = new Uint8Array(progressEvent.srcElement.result)
 	sid_file[cnt++] = 0xFF;
@@ -997,11 +1014,12 @@ document.addEventListener('DOMContentLoaded', function () {
 				case 'mnu_midi:Stop':
 					//midiOut.send(kill_msg);
 					send_command('set synth 0\r');
+                    /*
 					if (midi_state.file==null || midi_state.state!='playing'){
 						terminal.io.println("No MIDI file is currently playing");
 						break;
-					}
-					stopMidiFile();
+					}*/
+					//stopMidiFile();
 					if(sid_state==2){
 						sid_state=1;
 						frame_cnt=byt;

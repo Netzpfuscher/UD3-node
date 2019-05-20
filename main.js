@@ -149,7 +149,8 @@ if(argv.ws)	{
 	});
 	
 	socket.on('midi message', (data) => {
-		minsvc.min_queue_frame(MIN_ID_MIDI,data);
+       // console.log(data.length);
+        minsvc.min_queue_frame(MIN_ID_MIDI,data);
 	});
 	
 	socket.on('trans message', (data) => {
@@ -332,13 +333,16 @@ minsvc.handler = (id,data) => {
 		telemetry.receive(data);
 	}*/
     if(id==MIN_ID_MIDI){
-        for(let i=0;i<midi_clients.length;i++){
-            if(typeof clients[id].emit == 'function'){
-				//console.log(data);
-				clients[id].emit('midi message', data);
-			}else{
-				clients[id].write(buf);
-			}
+        
+        for(let i=0;i<clients.length;i++){
+            if(clients[i] != null){
+                //if(typeof clients[i].write != 'function'){
+                    //console.log(data);
+                    clients[i].emit('midi message', data);
+               // }else{
+               //     clients[i].write(buf);
+               // }
+            }
         }
     }
 }
@@ -350,7 +354,7 @@ function start_mqtt_telemetry(){
 }
 
 function start_timers(){
-	loop_timer = setInterval(loop, 5);
+	loop_timer = setInterval(loop, 2);
 	wd_timer = setInterval(wd_reset, 200);
 }
 
@@ -393,13 +397,13 @@ port.on('close', function (err) {
 });
 
 function loop(){
-  //minsvc.min_poll();
+  minsvc.min_poll();
  
 }
 
 function wd_reset(){
    if(clients.length>0){
-	  //minsvc.min_queue_frame(MIN_ID_WD,[]);
+	//  minsvc.min_queue_frame(MIN_ID_WD,[]);
    }
 }
 

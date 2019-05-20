@@ -510,6 +510,7 @@ module.exports = class minprot{
     // We are just queueing here: the poll() function puts the frame into the window and on to the wire
     if(this.transport_fifo.frames.length<this.TRANSPORT_MAX_WINDOW_SIZE) {
         // Copy frame details into frame slot, copy payload into ring buffer
+        //console.log(payload.length);
         let frame = [];
         frame.min_id = min_id & 0x3f;
 		frame.last_send = Date.now();
