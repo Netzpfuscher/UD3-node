@@ -47,6 +47,7 @@ var term_scope;
 
 
 var ldr = new btldr((data)=> {
+        console.log(data);
 		wsocket.emit('trans message', data);
 	},
 	(state)=> {
@@ -131,7 +132,7 @@ function refresh_UI(){
 	
 
 	if(connected){
-		response_timeout--;
+		//response_timeout--;
 
         if (response_timeout == 0) {
             response_timeout = TIMEOUT;
@@ -570,7 +571,7 @@ wsocket.on('trans message', (data) => {
       ldr.read(data);
     });	
 wsocket.on('midi message', (data) => {
-
+        
 		if(data[0]==0x78){
 			flow_ctl=0;
 		}

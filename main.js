@@ -155,7 +155,7 @@ if(argv.ws)	{
 	
 	socket.on('trans message', (data) => {
 		if(!port.writable) return;
-		//console.log('Send: ' + data.length);
+		console.log('Send: ' + data.length);
         port.write(data);
 	});
 	
@@ -332,8 +332,8 @@ minsvc.handler = (id,data) => {
         
         for(let i=0;i<clients.length;i++){
             if(clients[i] != null){
-                if(typeof clients[i].write != 'function'){
-                    //console.log(data);
+                console.log(typeof clients[i].emit);
+                if(typeof clients[i].emit == 'function'){
                     clients[i].emit('midi message', data);
                 }
             }

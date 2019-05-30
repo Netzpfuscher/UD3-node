@@ -20,7 +20,7 @@ class btldr {
 		this.write=write_cb;
 		this.state_cb=state_cb;
         this.byte_pos=0;
-        this.chunk_size=128;
+        this.chunk_size=32;
         this.receive_buffer=[];
     }
 
@@ -30,6 +30,7 @@ class btldr {
         for(let i=0;i<temp.length;i++){
            this.receive_buffer.push(temp[i]);
            if(this.receive_buffer.length>6 && temp[i] == 0x17){
+               console.log(this.receive_buffer);
                	let buf = new Uint8Array(this.receive_buffer);
                 switch(this.last_command){
                     case 0x38:

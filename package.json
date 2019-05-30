@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "mqtt": ">=2.18.8",
-    "serialport": ">=7.0.0",
+    "serialport": "^7.1.5",
     "socket.io": "^2.2.0",
     "yargs": ">=13.2.2"
   },
