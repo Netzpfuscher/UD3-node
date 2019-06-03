@@ -2,6 +2,35 @@ var min = require("./min.js");
 var tt = require("./telemetry.js");
 var telemetry = new tt();
 
+    
+var rtpmidi = require('rtpmidi'),
+
+  session = rtpmidi.manager.createSession({
+    localName: 'Session 1',
+    bonjourName: 'Node RTPMidi',
+    port: 5006
+  });
+  
+  session.on('ready', function() {
+  // Send a note
+  setInterval(function() {
+    session.sendMessage([0x80, 0x40]);
+    session.sendMessage([0x90, 0x40, 0x7f]);
+  }, 1000);
+
+});
+
+var midibuffer = [];
+
+// Route the messages
+session.on('message', function(deltaTime, message) {
+  for(let i=0;i<message.length;i++){
+      midibuffer.push(message[i]);
+  }
+});
+
+// Connect to a remote session
+//session.connect({ address: '127.0.0.1', port: 5004 });
 
 
 var yargs = require('yargs');
@@ -150,7 +179,9 @@ if(argv.ws)	{
 	
 	socket.on('midi message', (data) => {
        // console.log(data.length);
-        minsvc.min_queue_frame(MIN_ID_MIDI,data);
+        for(let i=0;i<data.length;i++){
+            midibuffer.push(data[i]);
+        }
 	});
 	
 	socket.on('trans message', (data) => {
@@ -290,8 +321,9 @@ midi_server.on('connection', function(sock) {
     midi_clients.push(sock);
     sock.on('data', function(data) {
         //console.log('DATA ' + sock.remoteAddress + ': ' + data);
-        let rawBuffer = Buffer.from(data,'binary');
-        minsvc.min_queue_frame(MIN_ID_MIDI,rawBuffer);
+        for(let i=0;i<data.length;i++){
+            midibuffer.push(data[i]);
+        }
     });
 	sock.on('close',  function () {
 		console.log('CLOSED: ' + sock.remoteAddress  + ':' + sock.remotePort);
@@ -394,6 +426,13 @@ port.on('close', function (err) {
 });
 
 function loop(){
+  if(midibuffer.length>0){
+      let cnt=midibuffer.length;
+      if(cnt>200) cnt = 200;
+      let temp_buf;
+      temp_buf = midibuffer.splice(0,cnt);
+      minsvc.min_queue_frame(MIN_ID_MIDI,temp_buf);
+  }
   minsvc.min_poll();
  
 }
