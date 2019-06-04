@@ -78,9 +78,9 @@ session.on('message', function(deltaTime, message) {
       midibuffer.push(message[i]);
   }
 });
-	
 
-if(config.webserver.enable)	{
+
+if(config.webserver.enabled)	{
 	var app = require('http').createServer((request, res)=>httpHandler(request, res))
 	var io = require('socket.io')(app);
 	const url = require('url');
@@ -100,7 +100,7 @@ if(config.webserver.enable)	{
 	};	
 		
 	app.listen(parseInt(config.webserver.port));
-	console.log('Starting webserver on '+onfig.webserver.port)
+	console.log('Starting webserver on ' + config.webserver.port)
 
 	function httpHandler (request, res) {
 	  let pathName = url.parse(request.url).path;
@@ -324,7 +324,7 @@ minsvc.sendByte = (data) => {
 
 minsvc.handler = (id,data) => {
     let buf = new Buffer.from(data);
-	if(id <= num_con){
+	//if(id <= num_con){
         
 		if(clients[id] != null){
             if(typeof clients[id].write != 'function'){
@@ -335,9 +335,9 @@ minsvc.handler = (id,data) => {
             }
             
 		}
-	}else if(id == num_con){
-		tt.receive(data);
-	}
+	//}//else if(id == num_con){
+	//	tt.receive(data);
+	//}
 
     if(id==MIN_ID_MIDI){
         
