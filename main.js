@@ -312,6 +312,7 @@ function gaugeValChange(data){
 	console.log(data);
 	if(mqtt_client.connected){
 		mqtt_client.publish(('telemetry/gauges/' + data.name), data.value);
+        console.log((('telemetry/gauges/' + data.name) + ' data: ' + data.value))
 	}
 }
 
@@ -324,7 +325,7 @@ minsvc.sendByte = (data) => {
 
 minsvc.handler = (id,data) => {
     let buf = new Buffer.from(data);
-	//if(id <= num_con){
+	if(id < num_con){
         
 		if(clients[id] != null){
             if(typeof clients[id].write != 'function'){
@@ -335,9 +336,9 @@ minsvc.handler = (id,data) => {
             }
             
 		}
-	//}//else if(id == num_con){
-	//	tt.receive(data);
-	//}
+	}else if(id == num_con){
+		telemetry.receive(data);
+	}
 
     if(id==MIN_ID_MIDI){
         
@@ -357,9 +358,9 @@ minsvc.handler = (id,data) => {
 }
 
 function start_mqtt_telemetry(){
-	send_min_socket(num_con+1,"MQTT",true);
+	send_min_socket(num_con,"MQTT",true);
 	let rBuffer = Buffer.from("\rtterm start\r", 'utf-8');
-	minsvc.min_queue_frame(num_con+1,rBuffer);
+	minsvc.min_queue_frame(num_con,rBuffer);
 }
 
 function start_timers(){

@@ -27,7 +27,7 @@ module.exports = class ttprot{
 			switch(this.term_state){
 				case this.TT_STATE_IDLE:
 					if(buf[i]== 0xff){
-						this.term_state = TT_STATE_FRAME;
+						this.term_state = this.TT_STATE_FRAME;
 					}else{
 						//var str = String.fromCharCode.apply(null, [buf[i]]);
 						//terminal.io.print(str);
@@ -35,28 +35,28 @@ module.exports = class ttprot{
 				break;
 					
 				case this.TT_STATE_FRAME:
-					receive.buffer[DATA_LEN]=buf[i];
-					receive.bytes_done=0;
-					this.term_state=TT_STATE_COLLECT;
+					this.receive.buffer[this.DATA_LEN]=buf[i];
+					this.receive.bytes_done=0;
+					this.term_state=this.TT_STATE_COLLECT;
 				break;
 				
 				case this.TT_STATE_COLLECT:
 					
-					if(receive.bytes_done==0){
-						receive.buffer[0] = buf[i];
-						receive.bytes_done++;
+					if(this.receive.bytes_done==0){
+						this.receive.buffer[0] = buf[i];
+						this.receive.bytes_done++;
 						break;
 					}else{
 						
-						if(receive.bytes_done<receive.buffer[DATA_LEN]-1){
-							receive.buffer[receive.bytes_done+1]=buf[i]
-							receive.bytes_done++;
+						if(this.receive.bytes_done<this.receive.buffer[this.DATA_LEN]-1){
+							this.receive.buffer[this.receive.bytes_done+1]=buf[i]
+							this.receive.bytes_done++;
 						}else{
-							receive.buffer[receive.bytes_done+1]=buf[i];
-							receive.bytes_done=0;
-							this.term_state=TT_STATE_IDLE;
-							this.compute(receive.buffer);
-							receive.buffer=[];
+							this.receive.buffer[this.receive.bytes_done+1]=buf[i];
+							this.receive.bytes_done=0;
+							this.term_state=this.TT_STATE_IDLE;
+							this.compute(this.receive.buffer);
+							this.receive.buffer=[];
 						}
 					}
 					
@@ -86,7 +86,7 @@ module.exports = class ttprot{
 	compute(dat){
 		let str;
 		switch(dat[this.DATA_TYPE]){
-			case TT_GAUGE:
+			case this.TT_GAUGE:
 				let value = this.bytes_to_signed(dat[3],dat[4]);
 				if(this.gauges[dat[DATA_NUM]].value != value){
 					this.gauges[dat[DATA_NUM]].value = value;
@@ -96,7 +96,7 @@ module.exports = class ttprot{
 				}
 				
 			break;
-			case TT_GAUGE_CONF:
+			case this.TT_GAUGE_CONF:
 				let gauge_num = dat[2].valueOf();
 				let gauge_min = this.bytes_to_signed(dat[3],dat[4]);
 				let gauge_max = this.bytes_to_signed(dat[5],dat[6]);
@@ -107,12 +107,12 @@ module.exports = class ttprot{
 				this.gauges[gauge_num].max = gauge_max;
 				console.log("TELEMETRY: New gauge conf num: " + gauge_num + " min: " + gauge_min + " max: " + gauge_max + " name: "+ str);
 			break;
-			case TT_STATE_SYNC:
+			case this.TT_STATE_SYNC:
 				setBusActive((dat[2]&1)!=0);
 				setTransientActive((dat[2]&2)!=0);
 				setBusControllable((dat[2]&4)!=0);
 				break;
-			case TT_CONFIG_GET:
+			case this.TT_CONFIG_GET:
 				dat.splice(0,2);
 				str = this.convertArrayBufferToString(dat, false);
 				if(str == "NULL;NULL"){
