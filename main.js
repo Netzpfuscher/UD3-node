@@ -1,36 +1,13 @@
 var min = require("./min.js");
 var tt = require("./telemetry.js");
 var telemetry = new tt();
+var fs = require('fs');
+var ini = require('ini');
 
-    
-var rtpmidi = require('rtpmidi'),
-
-  session = rtpmidi.manager.createSession({
-    localName: 'Session 1',
-    bonjourName: 'Node RTPMidi',
-    port: 5006
-  });
-  
-  session.on('ready', function() {
-  // Send a note
-  setInterval(function() {
-    session.sendMessage([0x80, 0x40]);
-    session.sendMessage([0x90, 0x40, 0x7f]);
-  }, 1000);
-
-});
+var rtpmidi = require('rtpmidi');
 
 var midibuffer = [];
 
-// Route the messages
-session.on('message', function(deltaTime, message) {
-  for(let i=0;i<message.length;i++){
-      midibuffer.push(message[i]);
-  }
-});
-
-// Connect to a remote session
-//session.connect({ address: '127.0.0.1', port: 5004 });
 
 
 var yargs = require('yargs');
@@ -44,6 +21,7 @@ var port_reopen_timer;
 var transparent_id=-1;
 
 var num_con = 3;
+var clients = Array(num_con);
 
 const MIN_ID_WD=10;
 const MIN_ID_MIDI=20;
@@ -65,47 +43,46 @@ const COMMAND_GET_CONFIG=8;
 var argv = yargs
   	.usage('UD3-node interface\n\nUsage: $0 [options]')
 	.help('help').alias('help', 'h')
-  	.version('version', '0.0.1').alias('version', 'V')
+  	.version('version', '0.0.2').alias('version', 'V')
 	.boolean('d')
   	.options({
-   		port: {
-      			alias: 'p',
-	      		description: "<port> serial port device",
+   		config: {
+      			alias: 'c',
+	      		description: "config file",
       			requiresArg: true,
       			required: true
     		},
-	    	baudrate: {
-      			alias: 'b',
-      			description: "<baudrate> serial port baudrate",
-	      		requiresArg: true,
-      			required: true
-    		},
-    		ts: {
-      			alias: 't',
-      			description: "<port> bind teslaterm server to port",
-      			requiresArg: true,
-      			required: true
-    		},
-			ws: {
-      			alias: 'w',
-      			description: "<port> bind webserver server to port",
+		debug_min: {
+      			alias: 'dm',
+	      		description: "min debug mode",
       			requiresArg: false,
       			required: false
-    		},
-		mqtt: {
-			alias: 'm',
-			description: "<mqtt broker> push telemetry to broker",
-                        requiresArg: false,
-                        required: false
-		}
+    		}
   	})
 	.argv;
+var config = ini.parse(fs.readFileSync(argv.config, 'utf-8'));
+
+var session = rtpmidi.manager.createSession({
+    localName: 'Session 1',
+    bonjourName: 'Node RTPMidi',
+    port: 5006
+  });
+  
+session.on('ready', function() {
+	
+});
+
+// Route the messages
+session.on('message', function(deltaTime, message) {
+  for(let i=0;i<message.length;i++){
+      midibuffer.push(message[i]);
+  }
+});
 	
 
-if(argv.ws)	{
+if(config.webserver.enable)	{
 	var app = require('http').createServer((request, res)=>httpHandler(request, res))
 	var io = require('socket.io')(app);
-	var fs = require('fs');
 	const url = require('url');
 	const path = require('path');
 
@@ -122,8 +99,8 @@ if(argv.ws)	{
 	  '.ttf': 'aplication/font-sfnt'
 	};	
 		
-	app.listen(parseInt(argv.ws));
-	console.log('Starting webserver on '+argv.ws)
+	app.listen(parseInt(config.webserver.port));
+	console.log('Starting webserver on '+onfig.webserver.port)
 
 	function httpHandler (request, res) {
 	  let pathName = url.parse(request.url).path;
@@ -237,24 +214,24 @@ function search_socket(socket){
 const SerialPort = require('serialport')
 var minsvc = new min();
 
-if(argv.d){
+if(argv.debug_min){
 	console.log("Debug mode");
 	minsvc.debug = 1;
 }
 
 
-if(argv.mqtt){
-	console.log("Connecting to MQTT broker...: " + argv.mqtt);
-	mqtt_client = mqtt.connect(argv.mqtt);
+if(config.mqtt.enabled){
+	console.log("Connecting to MQTT broker...: " + config.mqtt.server);
+	mqtt_client = mqtt.connect(config.mqtt.server);
 	num_con=2;
 	mqtt_client.on('connect', function (connack) {
-		console.log("Connected to MQTT broker: " + argv.mqtt);
+		console.log("Connected to MQTT broker: " + config.mqtt.server);
 	})
 
 }
 
 
-const port = new SerialPort(argv.port, { baudRate: parseInt(argv.baudrate,10) })
+const port = new SerialPort(config.serial.port, { baudRate: parseInt(config.serial.baudrate,10) })
 
 var net = require('net');
 
@@ -275,9 +252,9 @@ function send_min_socket(num, info, connect){
 	minsvc.min_queue_frame(MIN_ID_SOCKET,infoBuffer);
 }
 
-console.log("Bind telnet server to " + argv.ts);
-server.listen(parseInt(argv.ts),'0.0.0.0');
-let clients = Array(num_con);
+console.log("Bind telnet server to " + config.telnet.port);
+server.listen(parseInt(config.telnet.port),'0.0.0.0');
+
 for(let i=0;i<num_con;i++){
 	clients[i]=null;
 }
@@ -308,8 +285,8 @@ server.on('connection', function(sock) {
 	});
 });
 
-console.log("Bind midi server to " + (parseInt(argv.ts)+1));
-midi_server.listen((parseInt(argv.ts)+1),'0.0.0.0');
+console.log("Bind midi server to " + config.midi.port);
+midi_server.listen(parseInt(config.midi.port),'0.0.0.0');
 let midi_clients = [];
 midi_server.on('connection', function(sock) {
     console.log('CONNECTED midi: ' + sock.remoteAddress + ':' + sock.remotePort);
@@ -347,7 +324,7 @@ minsvc.sendByte = (data) => {
 
 minsvc.handler = (id,data) => {
     let buf = new Buffer.from(data);
-	if(clients.length >= id){
+	if(id <= num_con){
         
 		if(clients[id] != null){
             if(typeof clients[id].write != 'function'){
@@ -358,6 +335,8 @@ minsvc.handler = (id,data) => {
             }
             
 		}
+	}else if(id == num_con){
+		tt.receive(data);
 	}
 
     if(id==MIN_ID_MIDI){
@@ -395,9 +374,9 @@ function stop_timers(){
 
 port.on('open', function() {
 	start_timers();
-	console.log("Opened serial port " + argv.port + " at " + argv.baudrate + " baud");
+	console.log("Opened serial port " + config.serial.port + " at " + config.serial.baudrate + " baud");
 
-	if(argv.mqtt){
+	if(config.mqtt.enabled){
 		telemetry.cbGaugeValue = gaugeValChange;
 		start_mqtt_telemetry();
 	}
