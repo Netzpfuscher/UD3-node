@@ -61,11 +61,10 @@ var argv = yargs
   	})
 	.argv;
 var config = ini.parse(fs.readFileSync(argv.config, 'utf-8'));
-
 var session = rtpmidi.manager.createSession({
     localName: 'Session 1',
-    bonjourName: config.midiRTP.port,
-    port: config.midiRTP.port
+    bonjourName: config.midiRTP.name,
+    port: parseInt(config.midiRTP.port)
   });
   
 session.on('ready', function() {
@@ -344,7 +343,6 @@ minsvc.handler = (id,data) => {
         
         for(let i=0;i<clients.length;i++){
             if(clients[i] != null){
-                console.log(typeof clients[i].emit);
                 if(typeof clients[i].emit == 'function'){
                     clients[i].emit('midi message', data);
                 }
