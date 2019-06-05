@@ -1,10 +1,7 @@
-var connid;
 var connected = 0;
-var path;
 const wavecolor = ["white", "red", "blue", "green", "rgb(255, 128, 0)", "rgb(128, 128, 64)", "rgb(128, 64, 128)", "rgb(64, 128, 128)", "DimGray"];
 var pixel = 1;
 var midi_state=[];
-const simulated = false;
 
 const kill_msg = new Uint8Array([0xB0,0x77,0x00]);
 
@@ -19,19 +16,8 @@ const terminal = new hterm.Terminal();
 var TIMEOUT = 50;
 var response_timeout = 50;  // 50 * 20ms = 1s
 
-const WD_TIMEOUT = 5;
-var wd_reset = 5;  // 5 * 20ms = 160ms
-var wd_reset_msg=new Uint8Array([0xF0,0x0F,0x00]);
-
-var socket;
-var socket_midi;
-
-var ipaddr="0.0.0.0";
-
-
 var draw_mode=0;
 
-var midiServer;
 
 var meters;
 
@@ -40,7 +26,6 @@ let busControllable = false;
 let transientActive = false;
 
 var uitime = setInterval(refresh_UI, 20);
-let currentScript = null;
 var ontimeUI = {totalVal: 0, relativeVal: 100, absoluteVal: 0};
 
 var term_scope;
@@ -61,7 +46,6 @@ ldr.set_info_cb((str) => terminal.io.println(str));
 ldr.set_progress_cb((info) => progress_cb(info));
 
 function progress_cb(info){
-    //terminal.io.println('INFO: Programming done: ' + info.percent_done + '%');
     terminal.io.print('\033[2K');
     terminal.io.print('\r|');
     for(let i=0;i<50;i++){
@@ -139,41 +123,18 @@ function refresh_UI(){
             terminal.io.println('Connection lost, reconnecting...');
 
             reconnect();
-            //chrome.sockets.tcp.getInfo(socket_midi, midi_socket_ckeck);
-            //chrome.sockets.tcp.getInfo(socket, telnet_socket_ckeck);
 
 
         }
 
-        wd_reset--;
-		if(wd_reset==0){
-			wd_reset=WD_TIMEOUT;
-			if(connected==2){
-				//chrome.serial.send(connid, wd_reset_msg, sendcb);
-			}
-			if(connected==1){
-				if(socket_midi){
-					//chrome.sockets.tcp.send(socket_midi, wd_reset_msg, sendmidi);
-				}
-			}
-		}
-		
-		
+	
 	}
 	
 	meters.refresh();
 	
 	if(sid_state==2 && flow_ctl==1){
-		if(connected==1){/*
-            let buf =[];
-            for(let i=frame_cnt_old;i<=frame_cnt;i++){
-                buf[i]=sid_file_marked[i];
-            }
-            console.log(buf.length);*/
+		if(connected==1){
 			wsocket.emit('midi message', sid_file_marked.slice(frame_cnt_old,frame_cnt));
-            //wsocket.emit('midi message',buf);
-			//console.log(sid_file_marked.slice(frame_cnt_old,frame_cnt));
-            //console.log('send');
 			frame_cnt_old=frame_cnt;
 			frame_cnt+=byt;
 			if(frame_cnt>sid_file_marked.byteLength){
@@ -476,23 +437,6 @@ function updateSliderAvailability() {
 }
 
 function receive(info){
-	/*
-	if(info.socketId==socket_midi){
-		var buf = new Uint8Array(info.data);
-		if(buf[0]==0x78){
-			flow_ctl=0;
-		}
-		if(buf[0]==0x6f){
-			flow_ctl=1;
-		}
-	}
-	if(connected==1){
-		if (info.socketId!=socket) {
-			return;
-		}
-	}
-	if(info.socketId == ldr.socket) return;
-*/
 	
 	var buf = new Uint8Array(info);
 	var txt = '';
@@ -654,7 +598,6 @@ var sid_state=0;
 function event_read_SID(progressEvent){
 	var cnt=0;
     var sid_file = new Array(progressEvent.srcElement.result.byteLength + ((progressEvent.srcElement.result.byteLength/25)*4));
-	//var sid_file = new Uint8Array(progressEvent.srcElement.result.byteLength + ((progressEvent.srcElement.result.byteLength/25)*4));
 	var source_cnt=0;
 	var file = new Uint8Array(progressEvent.srcElement.result)
 	sid_file[cnt++] = 0xFF;
@@ -700,17 +643,6 @@ function ondrop(e){
 		const extension = file.name.substring(file.name.lastIndexOf(".")+1);
 		if (extension==="mid"){
 			loadMidiFile(file);
-		} else if (extension=="js") {
-			scripting.loadScript(file.path)
-				.then((script)=> {
-					currentScript = script;
-					w2ui['toolbar'].get('mnu_script').text = 'Script: '+file.name;
-					w2ui['toolbar'].refresh();
-				})
-				.catch((err)=>{
-					terminal.io.println("Failed to load script: "+err);
-					console.log(err);
-				});
 		}else if (extension=="dmp") {
 			loadSIDFile(file);
 		}else if (extension=="cyacd") {
@@ -795,7 +727,6 @@ function setRelativeOntime(percentage) {
 	}
 	percentage = Math.min(100, Math.max(0, percentage));
 	ontimeUI.relative.textContent = ontimeUI.relativeVal = percentage;
-	midiServer.sendRelativeOntime(ontimeUI.relativeVal);
 	ontimeChanged();
 }
 
@@ -946,10 +877,30 @@ document.addEventListener('DOMContentLoaded', function () {
 				{ text: 'Stop', icon: 'fa fa-bolt'}
             ]},
 			
-			{ type: 'menu', id: 'mnu_script', text: 'Script: none', icon: 'fa fa-table', items: [
-				{ text: 'Start', icon: 'fa fa-bolt'},
-				{ text: 'Stop', icon: 'fa fa-bolt'}
-            ]},
+			{ type: 'menu-radio', id: 'synth', icon: 'fa fa-star',
+                text: function (item) {
+                    var text = item.selected;
+                    var el   = this.get('synth:' + item.selected);
+					switch(item.selected){
+						case 'off':
+							send_command('set synth 0\r');
+						break;
+						case 'midi':
+							send_command('set synth 1\r');
+						break;
+						case 'sid':
+							send_command('set synth 2\r');
+						break;
+					}
+                    return 'Synth: ' + el.text;
+                },
+				selected: 'off',
+                items: [
+					{ id: 'off', text: 'OFF'},
+                    { id: 'midi', text: 'MIDI'},
+					{ id: 'sid', text: 'SID'}
+                ]
+            },
 			
             { type: 'spacer' },
 			{ type: 'button', id: 'kill_set', text: 'KILL SET', icon: 'fa fa-power-off' },
@@ -986,7 +937,6 @@ document.addEventListener('DOMContentLoaded', function () {
 					send_command('config_get\r');
 					break;
                 case 'mnu_command:bootloader':
-                    //send_command('bootloader\r');
 					wsocket.emit('ctl message', 'transparent=1');
                     setTimeout(() => ldr.connect(), 500);
                     break;
@@ -1013,38 +963,20 @@ document.addEventListener('DOMContentLoaded', function () {
 					}
 				break;
 				case 'mnu_midi:Stop':
-					//midiOut.send(kill_msg);
+					wsocket.emit('midi message', kill_msg);
 					send_command('set synth 0\r');
-                    /*
+                    
 					if (midi_state.file==null || midi_state.state!='playing'){
 						terminal.io.println("No MIDI file is currently playing");
 						break;
-					}*/
-					//stopMidiFile();
+					}
+					stopMidiFile();
 					if(sid_state==2){
 						sid_state=1;
 						frame_cnt=byt;
 						frame_cnt_old=0;
 					}
 				break;
-				case 'mnu_script:Start':
-					if (currentScript==null) {
-						terminal.io.println("Please select a script file using drag&drop first");
-						break;
-					}
-					scripting.startScript(currentScript);
-					break;
-				case 'mnu_script:Stop':
-					if (currentScript==null) {
-						terminal.io.println("Please select a script file using drag&drop first");
-						break;
-					}
-					if (!scripting.isRunning()) {
-						terminal.io.println("The script can not be stopped since it isn't running");
-						break;
-					}
-					scripting.cancel();
-					break;
 				case 'kill_set':
 					send_command('kill set\r');
 				break;

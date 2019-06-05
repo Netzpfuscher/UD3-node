@@ -64,8 +64,8 @@ var config = ini.parse(fs.readFileSync(argv.config, 'utf-8'));
 
 var session = rtpmidi.manager.createSession({
     localName: 'Session 1',
-    bonjourName: 'Node RTPMidi',
-    port: 5006
+    bonjourName: config.midiRTP.port,
+    port: config.midiRTP.port
   });
   
 session.on('ready', function() {
