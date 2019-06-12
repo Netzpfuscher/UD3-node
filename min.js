@@ -54,6 +54,8 @@ module.exports = class minprot{
 		this.transport_fifo.rn= 0;
 	    this.transport_fifo.last_sent_ack_time_ms=0;
 	    this.transport_fifo.last_sent_frame=0;
+        this.transport_fifo.last_sent_seq=-1;
+        this.transport_fifo.last_sent_seq_cnt=0;
 	    this.transport_fifo.last_received_anything_ms=Date.now();
 	    this.transport_fifo.last_received_frame_ms=0;
 		this.transport_fifo.frames= [];
@@ -446,7 +448,9 @@ module.exports = class minprot{
 					let wire_size = this.on_wire_size(this.transport_fifo.frames[window_size].length);
 					if(wire_size < this.remote_rx_space) {
 						this.transport_fifo.frames[window_size].seq = this.transport_fifo.sn_max;
+                        this.transport_fifo.last_sent_seq = this.transport_fifo.sn_max;
 						this.transport_fifo.frames[window_size].last_send = this.now;
+                        if(this.debug) console.log("SEQA=" + this.transport_fifo.frames[window_size].seq);
 						this.on_wire_bytes(this.transport_fifo.frames[window_size].min_id| 0x80, this.transport_fifo.frames[window_size].seq, this.transport_fifo.frames[window_size].payload);
 						this.transport_fifo.sn_max++;
 					}
@@ -466,7 +470,14 @@ module.exports = class minprot{
                         if(resend_frame_num>-1 && (this.now - this.transport_fifo.frames[resend_frame_num].last_send) >= this.TRANSPORT_FRAME_RETRANSMIT_TIMEOUT_MS){
 							let wire_size = this.on_wire_size(this.transport_fifo.frames[resend_frame_num].length);
 							if(wire_size < this.remote_rx_space) {
-								this.on_wire_bytes(this.transport_fifo.frames[resend_frame_num].min_id| 0x80, this.transport_fifo.frames[resend_frame_num].seq, this.transport_fifo.frames[resend_frame_num].payload);
+                                if(this.debug) console.log("SEQB=" + this.transport_fifo.frames[resend_frame_num].seq);
+                                if(this.transport_fifo.frames[resend_frame_num].seq == this.transport_fifo.last_sent_seq) this.transport_fifo.last_sent_seq_cnt++;
+                                this.transport_fifo.last_sent_seq = this.transport_fifo.frames[resend_frame_num].seq;
+                                if(this.transport_fifo.last_sent_seq_cnt>10){
+                                    this.min_transport_reset(true);
+                                }else{
+                                    this.on_wire_bytes(this.transport_fifo.frames[resend_frame_num].min_id| 0x80, this.transport_fifo.frames[resend_frame_num].seq, this.transport_fifo.frames[resend_frame_num].payload);
+                                }
 							}
                         }
                             
@@ -504,6 +515,8 @@ module.exports = class minprot{
         this.transport_fifo.last_received_anything_ms = this.now;
         this.transport_fifo.last_sent_ack_time_ms = this.now;
         this.transport_fifo.last_received_frame_ms = 0;
+        
+        this.transport_fifo.frames= [];
     }
     
     min_queue_frame(min_id, payload){

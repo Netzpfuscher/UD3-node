@@ -53,7 +53,7 @@ var argv = yargs
       			required: true
     		},
 		debug_min: {
-      			alias: 'dm',
+      			alias: 'd',
 	      		description: "min debug mode",
       			requiresArg: false,
       			required: false
