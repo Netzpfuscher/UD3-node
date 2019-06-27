@@ -308,13 +308,18 @@ midi_server.on('connection', function(sock) {
 });
 
 function gaugeValChange(data){
-	console.log(data);
 	if(mqtt_client.connected){
-		mqtt_client.publish(('telemetry/gauges/' + data.name), data.value);
-        console.log((('telemetry/gauges/' + data.name) + ' data: ' + data.value))
+		mqtt_client.publish(('telemetry/gauges/' + data.name), String(data.value));
+        //console.log((('telemetry/gauges/' + data.name) + ' data: ' + data.value))
 	}
 }
 
+function cbEvent(data){
+	if(mqtt_client.connected){
+		mqtt_client.publish('telemetry/event', data);
+        //console.log((('telemetry/gauges/' + data.name) + ' data: ' + data.value))
+	}
+}
 
 
 minsvc.sendByte = (data) => {
@@ -323,6 +328,7 @@ minsvc.sendByte = (data) => {
 }
 
 minsvc.handler = (id,data) => {
+    
     let buf = new Buffer.from(data);
 	if(id < num_con){
         
@@ -337,6 +343,7 @@ minsvc.handler = (id,data) => {
 		}
 	}else if(id == num_con){
 		telemetry.receive(data);
+        
 	}
 
     if(id==MIN_ID_MIDI){
@@ -363,7 +370,7 @@ function start_mqtt_telemetry(){
 
 function start_timers(){
 	loop_timer = setInterval(loop, 2);
-	wd_timer = setInterval(wd_reset, 500);
+	wd_timer = setInterval(wd_reset, 100);
 }
 
 function stop_timers(){
@@ -377,6 +384,7 @@ port.on('open', function() {
 
 	if(config.mqtt.enabled){
 		telemetry.cbGaugeValue = gaugeValChange;
+        telemetry.cbEvent = cbEvent;
 		start_mqtt_telemetry();
 	}
 });
@@ -417,7 +425,7 @@ function loop(){
 
 function wd_reset(){
    if(clients.length>0){
-	  //minsvc.min_queue_frame(MIN_ID_WD,[]);
+	  minsvc.min_queue_frame(MIN_ID_WD,[]);
    }
 }
 
