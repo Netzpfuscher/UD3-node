@@ -4,10 +4,12 @@ var telemetry = new tt();
 var fs = require('fs');
 var ini = require('ini');
 
+var _netsid = require('./nwsid.js');
+
+
 var rtpmidi = require('rtpmidi');
 
 var midibuffer = [];
-
 
 
 var yargs = require('yargs');
@@ -16,7 +18,6 @@ var mqtt_client;
 
 var wd_timer;
 var loop_timer;
-var port_reopen_timer;
 
 var transparent_id=-1;
 
@@ -241,6 +242,10 @@ var midi_server = net.createServer(function(socket) {
 	
 });
 
+if(config.SID.enabled){
+	var netsid = new _netsid(parseInt(config.SID.port),config.SID.name);
+}
+
 function send_min_socket(num, info, connect){
 	if(connect == true){
 		connect = 1;
@@ -307,6 +312,8 @@ midi_server.on('connection', function(sock) {
 	});
 });
 
+
+
 function gaugeValChange(data){
 	if(mqtt_client.connected){
 		mqtt_client.publish(('telemetry/gauges/' + data.name), String(data.value));
@@ -326,7 +333,7 @@ minsvc.sendByte = (data) => {
 	if(!port.writable) return;
 	port.write(data);
 }
-
+let flow_ctl=1;
 minsvc.handler = (id,data) => {
     
     let buf = new Buffer.from(data);
@@ -347,7 +354,13 @@ minsvc.handler = (id,data) => {
 	}
 
     if(id==MIN_ID_MIDI){
-        
+        for(let i = 0;i<data.length;i++){
+			if(data[i]==0x78){
+				flow_ctl=0;
+			}else if(data[i]==0x6f){
+				flow_ctl=1;
+			}
+		}
         for(let i=0;i<clients.length;i++){
             if(clients[i] != null){
                 if(typeof clients[i].emit == 'function'){
@@ -412,6 +425,18 @@ port.on('close', function (err) {
 });
 
 function loop(){
+	
+	if(flow_ctl && config.SID.enabled){
+		let temp = netsid.popFrame();
+		if(temp!=null){
+	
+			for(let i=0;i<temp.length;i++){
+				midibuffer.push(temp[i]);
+			}
+		}
+	}
+	
+	
   if(midibuffer.length>0){
       let cnt=midibuffer.length;
       if(cnt>200) cnt = 200;
@@ -424,6 +449,8 @@ function loop(){
 }
 
 function wd_reset(){
+	
+	
    if(clients.length>0){
 	  minsvc.min_queue_frame(MIN_ID_WD,[]);
    }

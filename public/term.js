@@ -752,14 +752,39 @@ function onRelativeOntimeSelect() {
 	updateOntimeLabels();
 }
 
+function slider1(){
+	var slider = document.getElementById('slider1');
+	var slider_disp = document.getElementById('slider1_disp');
+	var pwd = Math.floor(1/slider.value*1000000);
+	slider_disp.innerHTML = slider.value + ' Hz';
+	times.pwd = pwd;
+	//send_command('set pwd ' + pwd + '\r');
+}
+
 function setBPS(bps){
 	setSliderValue("slider1", bps);
 	slider1();
 }
 
+function slider2(){
+	var slider = document.getElementById('slider2');
+	var slider_disp = document.getElementById('slider2_disp');
+	slider_disp.innerHTML = slider.value + ' ms';
+	times.bon = slider.value;
+	//send_command('set bon ' + slider.value + '\r');
+}
+
 function setBurstOntime(time){
 	setSliderValue("slider2", time);
 	slider2();
+}
+
+function slider3(){
+	var slider = document.getElementById('slider3');
+	var slider_disp = document.getElementById('slider3_disp');
+	slider_disp.innerHTML = slider.value + ' ms';
+	times.boff = slider.value;
+	//send_command('set boff ' + slider.value + '\r');
 }
 
 function setBurstOfftime(time){
@@ -1059,13 +1084,15 @@ document.addEventListener('DOMContentLoaded', function () {
 			ontimeUI.relativeSelect.disabled = true;
 		}
 	};
+	document.getElementById('slider1').addEventListener("input", slider1);
+	document.getElementById('slider2').addEventListener("input", slider2);
+	document.getElementById('slider3').addEventListener("input", slider3);
 	
 	readTextFile('config.ini');
 	
 		
     ctx = document.getElementById("wavecanvas").getContext('2d');
 	
-	coil_hot_led=1;
 
 	meters = new cls_meter(NUM_GAUGES);
 	
