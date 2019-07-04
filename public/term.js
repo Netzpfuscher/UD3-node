@@ -495,7 +495,7 @@ receive.bytes_done = 0;
 
 function start_conf(){
 	send_command('\r');
-	send_command('set pw 0\r');
+	//send_command('set pw 0\r');
 	send_command('set pwd 50000\r');
 	send_command('kill reset\rtterm start\rcls\r');
 }

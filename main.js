@@ -333,7 +333,7 @@ minsvc.sendByte = (data) => {
 	if(!port.writable) return;
 	port.write(data);
 }
-let flow_ctl=1;
+
 minsvc.handler = (id,data) => {
     
     let buf = new Buffer.from(data);
@@ -356,11 +356,13 @@ minsvc.handler = (id,data) => {
     if(id==MIN_ID_MIDI){
         for(let i = 0;i<data.length;i++){
 			if(data[i]==0x78){
-				flow_ctl=0;
+				netsid.busy(true);
 			}else if(data[i]==0x6f){
-				flow_ctl=1;
+                netsid.busy(false);
 			}
+
 		}
+		return;
         for(let i=0;i<clients.length;i++){
             if(clients[i] != null){
                 if(typeof clients[i].emit == 'function'){
@@ -382,7 +384,7 @@ function start_mqtt_telemetry(){
 }
 
 function start_timers(){
-	loop_timer = setInterval(loop, 2);
+	loop_timer = setInterval(loop, 10);
 	wd_timer = setInterval(wd_reset, 100);
 }
 
@@ -426,19 +428,10 @@ port.on('close', function (err) {
 
 function loop(){
 	
-	if(flow_ctl && config.SID.enabled){
-		let temp = netsid.popFrame();
-		if(temp!=null){
-	
-			for(let i=0;i<temp.length;i++){
-				midibuffer.push(temp[i]);
-			}
-		}
-	}
-	
-	
-  if(midibuffer.length>0){
+
+  if(midibuffer.length>0 && netsid.busy_flag==false){
       let cnt=midibuffer.length;
+
       if(cnt>200) cnt = 200;
       let temp_buf;
       temp_buf = midibuffer.splice(0,cnt);
@@ -448,9 +441,17 @@ function loop(){
  
 }
 
+netsid.data_cb=sid_cb;
+
+function sid_cb(data){
+	//console.log(data);
+    for (let i = 0; i < data.length; i++) {
+        midibuffer.push(data[i]);
+    }
+}
+
 function wd_reset(){
-	
-	
+
    if(clients.length>0){
 	  minsvc.min_queue_frame(MIN_ID_WD,[]);
    }

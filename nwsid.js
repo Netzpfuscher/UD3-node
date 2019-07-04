@@ -29,19 +29,17 @@ module.exports = class nwsid{
 		this.registers[2]=0xFF;
 		this.registers[3]=0xFF;
 		this.fifo = [];
-		this.fifoLength = 50;
+		this.fifoLength = 200;
 		this.delay=0;
 		this.name = name;
+		this.busy_flag = false;
+		this.data_cb=null;
 	}
 	
-	popFrame(){
-		if(this.fifo.length>0){
-			return this.fifo.pop();
-		}else{
-			return null;
-		}
+	busy(flag){
+		this.busy_flag=flag;
 	}
-	
+
 	connect(){
 		this.sid_server.on('connection', (sock) => {
 			console.log('CONNECTED SID: ' + sock.remoteAddress + ':' + sock.remotePort);
@@ -114,13 +112,13 @@ module.exports = class nwsid{
 			break;
 			case 5:
 
-				if(this.fifo.length>this.fifoLength){
+				if(this.busy_flag==true){
 					this.send_busy(socket);
 					break;
 				}else{
 					this.send_ok(socket);
 				}
-				
+
 				for(let i=4;i<data.length;i+=4){
 					let delay = data[i]<<8;
 					delay |= data[i+1];
@@ -131,7 +129,7 @@ module.exports = class nwsid{
 					}
 				}
 
-				this.fifo.push(this.registers);
+				this.data_cb(this.registers);
 
 
 			break;
