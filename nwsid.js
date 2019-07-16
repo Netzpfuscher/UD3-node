@@ -12,6 +12,8 @@ module.exports = class nwsid{
 		this.VERSION = 4;
 		this.COUNT = 5;
 		this.INFO = 6;
+
+		this.CMD_FLUSH = 0;
 		
 		this.sid_server = net.createServer(function(socket) {
 	
@@ -34,6 +36,7 @@ module.exports = class nwsid{
 		this.name = name;
 		this.busy_flag = false;
 		this.data_cb=null;
+		this.flush_cb=null;
 	}
 	
 	busy(flag){
@@ -95,7 +98,8 @@ module.exports = class nwsid{
 		let resp;
 		
 		switch(data[0]){
-			case 0:
+			case this.CMD_FLUSH:
+			    this.flush_cb();
 				this.send_ok(socket);
 			break;
 			case 1:

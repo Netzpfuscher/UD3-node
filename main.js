@@ -24,12 +24,15 @@ var transparent_id=-1;
 var num_con = 3;
 var clients = Array(num_con);
 
+var last_synth=0;
+
 const MIN_ID_WD=10;
 const MIN_ID_MIDI=20;
 const MIN_ID_TERM=0;
 const MIN_ID_RESET=11;
 const MIN_ID_COMMAND=12;
 const MIN_ID_SOCKET=13;
+const MIN_ID_SYNTH=14;
     
 const COMMAND_IP=1;
 const COMMAND_GW=2;
@@ -39,6 +42,12 @@ const COMMAND_PASSWD=5;
 const COMMAND_INFO=6;
 const COMMAND_ETH_STATE=7;
 const COMMAND_GET_CONFIG=8;
+
+const SYNTH_CMD_FLUSH=0x01;
+const SYNTH_CMD_SID=0x02;
+const SYNTH_CMD_MIDI=0x03;
+const SYNTH_CMD_OFF =0x04;
+
 
 
 var argv = yargs
@@ -74,6 +83,12 @@ session.on('ready', function() {
 
 // Route the messages
 session.on('message', function(deltaTime, message) {
+	if(last_synth!=1){
+		last_synth=1;
+        let temp_buf=[];
+		temp_buf[0]=SYNTH_CMD_MIDI;
+        minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
+	}
   for(let i=0;i<message.length;i++){
       midibuffer.push(message[i]);
   }
@@ -442,11 +457,23 @@ function loop(){
 }
 
 netsid.data_cb=sid_cb;
+netsid.flush_cb=sid_flush_cb;
 
 function sid_cb(data){
 	//console.log(data);
     for (let i = 0; i < data.length; i++) {
         midibuffer.push(data[i]);
+    }
+}
+function sid_flush_cb(){
+	midibuffer=[];
+	let temp_buf=[];
+	temp_buf[0]=SYNTH_CMD_FLUSH;
+    minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
+    if(last_synth!=2){
+        last_synth=2;
+        temp_buf[0]=SYNTH_CMD_SID;
+        minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
     }
 }
 
