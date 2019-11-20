@@ -7,6 +7,7 @@ class scope {
 		this.control_space = 15;
 		this.top_space = 20;
 		this.trigger_space = 10;
+		this.steps_draw = 10;
 		this.plot.xpos = this.trigger_space+1;
 		this.plot.ypos = [];
 		this.tt = tt;
@@ -18,7 +19,7 @@ class scope {
 		this.ctxb = this.backcanvas.getContext('2d');
 	}
 	resize(){
-		this.plot.xpos = this.trigger_space+1;
+		this.plot.xpos = this.trigger_space+1+this.steps_draw;
 		this.wavecanvas.style.width=(90-this.control_space)+'%';
 		this.wavecanvas.style.height='100%';
 		this.wavecanvas.width  = this.wavecanvas.offsetWidth;
@@ -142,9 +143,9 @@ class scope {
 	redrawMeas(){
         let x_res = this.wavecanvas.width;
         let y_res = this.wavecanvas.height;
-		this.ctx.clearRect(this.trigger_space, y_res - this.meas_space, x_res - this.info_space, y_res);
+		this.ctx.clearRect(this.trigger_space, y_res - this.meas_space, x_res, y_res);
 
-		this.ctx.font = "12px Arial";
+		this.ctx.font = "10px Arial";
 		this.ctx.textAlign = "left";
 		this.ctx.fillStyle = "white";
 		if(this.tt.trigger!=-1){
@@ -159,7 +160,7 @@ class scope {
 		}else{
 			this.ctx.fillText("Trg lvl: off" ,this.trigger_space, y_res - this.meas_position);
 		}
-        let text_pos = this.trigger_space+180;
+        let text_pos = this.trigger_space+120;
 		for(let i=0;i<NUM_GAUGES;i++){
 			if (tterm[i].name){
 				this.ctx.fillStyle = wavecolor[i];
@@ -182,14 +183,17 @@ class scope {
 
 	}
 	
-	plot(){
+	plot() {
 
-        let x_res = this.wavecanvas.width-this.info_space;
-        let y_res = this.wavecanvas.height-this.meas_space-this.top_space;
+        let x_res = this.wavecanvas.width - this.info_space;
+        let y_res = this.wavecanvas.height - this.meas_space - this.top_space;
 
-		
+        let pix = 32;
+        if (this.plot.xpos-this.steps_draw > x_res - pix){
+            pix = x_res - this.plot.xpos;
+    	}
 
-        this.ctx.clearRect(this.plot.xpos, this.top_space, pixel, y_res);
+        this.ctx.clearRect(this.plot.xpos-this.steps_draw, this.top_space, pix, y_res);
 
 		for(let i = 0;i<this.tt.length;i++){
 			//Meas
@@ -205,20 +209,20 @@ class scope {
 				this.ctx.beginPath();
 				this.ctx.lineWidth = pixel;
 				this.ctx.strokeStyle = wavecolor[i];
-				this.ctx.moveTo(this.plot.xpos,this.plot.ypos[i]+this.top_space);
-				this.ctx.lineTo(this.plot.xpos+pixel,ypos+this.top_space);
+				this.ctx.moveTo(this.plot.xpos-this.steps_draw,this.plot.ypos[i]+this.top_space);
+				this.ctx.lineTo(this.plot.xpos,ypos+this.top_space);
 				this.ctx.stroke();
 			}
 			this.plot.ypos[i] = ypos;//save previous position
 		}
 
-		this.plot.xpos+=pixel;
+		this.plot.xpos+=this.steps_draw;
 		if(this.plot.xpos>=x_res){
 			this.calc_meas();
 			this.tt.trigger_trgt=0;
 			this.tt.trigger_block=0;
 			this.redrawMeas();
-			this.plot.xpos = this.trigger_space+1;
+			this.plot.xpos = this.trigger_space+1+this.steps_draw;
 			
 		}
 	}
@@ -243,9 +247,9 @@ class scope {
 
 	calc_meas(){
 		for(let i = 0;i<meas_backbuffer.length;i++){
-			meas[i].min = meas_backbuffer[i].min.toFixed(2);
-			meas[i].max = meas_backbuffer[i].max.toFixed(2);
-			meas[i].avg = Math.sqrt(meas_backbuffer[i].avg_sum / meas_backbuffer[i].avg_samp).toFixed(2);
+			meas[i].min = meas_backbuffer[i].min.toFixed(0);
+			meas[i].max = meas_backbuffer[i].max.toFixed(0);
+			meas[i].avg = Math.sqrt(meas_backbuffer[i].avg_sum / meas_backbuffer[i].avg_samp).toFixed(0);
 		}
 	}
 	

@@ -394,7 +394,7 @@ minsvc.handler = (id,data) => {
 
 function start_mqtt_telemetry(){
 	send_min_socket(num_con,"MQTT",true);
-	let rBuffer = Buffer.from("\rtterm start\r", 'utf-8');
+	let rBuffer = Buffer.from("\rtterm mqtt\r", 'utf-8');
 	minsvc.min_queue_frame(num_con,rBuffer);
 }
 
