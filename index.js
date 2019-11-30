@@ -227,6 +227,60 @@ function search_socket(socket){
 }
 
 const SerialPort = require('serialport')
+var port;
+if(config.serial.autodetect == true){
+    let serial_list = SerialPort.list();
+    serial_list.then(function(value) {
+        for(let i=0;i<value.length;i++){
+            if(value[i].serialNumber == config.serial.port){
+                port = new SerialPort(value[i].comName, { baudRate: parseInt(config.serial.baudrate,10) });
+                install_port_cb();
+            }
+        }
+    }, function(reason) {
+        console.log(reason); // Error!
+    });
+
+}else{
+    port = new SerialPort(config.serial.port, { baudRate: parseInt(config.serial.baudrate,10) });
+    install_port_cb();
+}
+
+function install_port_cb() {
+    port.on('open', function () {
+        start_timers();
+        console.log("Opened serial port " + config.serial.port + " at " + config.serial.baudrate + " baud");
+
+        if (config.mqtt.enabled) {
+            telemetry.cbGaugeValue = gaugeValChange;
+            telemetry.cbEvent = cbEvent;
+            start_mqtt_telemetry();
+        }
+    });
+
+    // Switches the port into "flowing mode"
+    port.on('data', function (data) {
+        if(transparent_id>-1){
+            clients[transparent_id].emit('trans message', data);
+            //for(let i=0;i<data.length;i++){
+            //console.log('Rec: ' + data[i].toString(16));
+            //}
+        }else{
+            minsvc.min_poll(data);
+        }
+    });
+
+    // Switches the port into "flowing mode"
+        port.on('error', function (err) {
+            //console.log(err);
+        });
+        port.on('close', function (err) {
+            setTimeout(() =>{
+                port.open();
+            }, 200);
+        });
+}
+
 var minsvc = new min();
 
 if(argv.debug_min){
@@ -245,8 +299,6 @@ if(config.mqtt.enabled){
 
 }
 
-
-const port = new SerialPort(config.serial.port, { baudRate: parseInt(config.serial.baudrate,10) })
 
 var net = require('net');
 
@@ -408,41 +460,13 @@ function stop_timers(){
 	clearInterval(wd_timer);
 }
 
-port.on('open', function() {
-	start_timers();
-	console.log("Opened serial port " + config.serial.port + " at " + config.serial.baudrate + " baud");
 
-	if(config.mqtt.enabled){
-		telemetry.cbGaugeValue = gaugeValChange;
-        telemetry.cbEvent = cbEvent;
-		start_mqtt_telemetry();
-	}
-});
 
-// Switches the port into "flowing mode"
-port.on('data', function (data) {
-	if(transparent_id>-1){
-		clients[transparent_id].emit('trans message', data);
-       //for(let i=0;i<data.length;i++){
-        //console.log('Rec: ' + data[i].toString(16));   
-       //}
-	}else{
-		minsvc.min_poll(data);
-	}
-});
 
-// Switches the port into "flowing mode"
-port.on('error', function (err) {
-   	//console.log(err);
-});
-port.on('close', function (err) {
-	setTimeout(() =>{
-		port.open();
-	}, 200);
-});
+
+
 
 function loop(){
-	
 
   if(midibuffer.length>0 && netsid.busy_flag==false){
       let cnt=midibuffer.length;
