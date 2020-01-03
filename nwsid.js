@@ -25,7 +25,7 @@ module.exports = class nwsid{
 		this.connect();
 		
 		this.last_frame = Date.now();
-		this.registers=new Buffer.from(Array(29));
+		this.registers=new Buffer.from(Array(33));
 		this.registers[0]=0xFF;
 		this.registers[1]=0xFF;
 		this.registers[2]=0xFF;
@@ -37,6 +37,7 @@ module.exports = class nwsid{
 		this.busy_flag = false;
 		this.data_cb=null;
 		this.flush_cb=null;
+		this.ud_time=0;
 	}
 	
 	busy(flag){
@@ -99,6 +100,8 @@ module.exports = class nwsid{
 		
 		switch(data[0]){
 			case this.CMD_FLUSH:
+				this.ud_time=0;
+				//console.log("FLUSH");
 			    this.flush_cb();
 				this.send_ok(socket);
 			break;
@@ -132,8 +135,13 @@ module.exports = class nwsid{
 						this.registers[data[i+2]+4] = data[i+3];
 					}
 				}
-
+                this.registers[29] = (this.ud_time & 0xFF);
+                this.registers[30] = (this.ud_time>>8) & 0xFF;
+                this.registers[31] = (this.ud_time>>16) & 0xFF;
+				this.registers[32] = (this.ud_time>>24) & 0xFF;
+				//console.log(this.registers, this.registers.length);
 				this.data_cb(this.registers);
+				this.ud_time += 6000;
 
 
 			break;
