@@ -31,7 +31,7 @@
     "node": ">= 0.6.0"
   },
   "devDependencies": {},
-  "bin": "main.js",
+  "bin": "index.js",
   "pkg": {
     "assets": [
       "public/**/*"
