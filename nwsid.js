@@ -115,6 +115,7 @@ module.exports = class nwsid{
 				this.send_ok(socket);
 			break;
 			case 4:
+				//console.log("----------------------Try-Delay");
 				this.send_ok(socket);
 			break;
 			case 5:
@@ -125,11 +126,11 @@ module.exports = class nwsid{
 				}else{
 					this.send_ok(socket);
 				}
-
+                this.delay=0;
 				for(let i=4;i<data.length;i+=4){
 					let delay = data[i]<<8;
 					delay |= data[i+1];
-					this.delay=delay;
+					this.delay+=delay;
 					//console.log('Delay: ' + delay + ' Register: ' + data[i+2] + ' Value: ' + data[i+3])
 					if(data[i+2]<25){
 						this.registers[data[i+2]+4] = data[i+3];
@@ -139,9 +140,9 @@ module.exports = class nwsid{
                 this.registers[30] = (this.ud_time>>8) & 0xFF;
                 this.registers[31] = (this.ud_time>>16) & 0xFF;
 				this.registers[32] = (this.ud_time>>24) & 0xFF;
-				//console.log(this.registers, this.registers.length);
+				//console.log(this.delay / 3.333);
 				this.data_cb(this.registers);
-				this.ud_time += 6000;
+				this.ud_time += this.delay / 3.333;  //3.333us Tick Time of SG-Timer in UD3
 
 
 			break;
