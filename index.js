@@ -451,7 +451,7 @@ function start_mqtt_telemetry(){
 }
 
 function start_timers(){
-	loop_timer = setInterval(loop, 10);
+	loop_timer = setInterval(loop, 20);
 	wd_timer = setInterval(wd_reset, 100);
 }
 
