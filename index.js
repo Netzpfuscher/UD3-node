@@ -59,8 +59,8 @@ var argv = yargs
    		config: {
       			alias: 'c',
 	      		description: "config file",
-      			requiresArg: true,
-      			required: true
+      			requiresArg: false,
+      			required: false
     		},
 		debug_min: {
       			alias: 'd',
@@ -70,7 +70,13 @@ var argv = yargs
     		}
   	})
 	.argv;
-var config = ini.parse(fs.readFileSync(argv.config, 'utf-8'));
+if(argv.config){
+    var config = ini.parse(fs.readFileSync(argv.config, 'utf-8')); 
+}else{
+    console.log('Config not specified using default config.ini');
+    var config = ini.parse(fs.readFileSync('config.ini', 'utf-8')); 
+}
+     
 var session = rtpmidi.manager.createSession({
     localName: 'Session 1',
     bonjourName: config.midiRTP.name,
