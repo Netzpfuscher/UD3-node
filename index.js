@@ -5,7 +5,7 @@ var fs = require('fs');
 var ini = require('ini');
 
 var _netsid = require('./nwsid.js');
-
+var microtime = require('microtime')
 
 var rtpmidi = require('rtpmidi');
 
@@ -466,12 +466,6 @@ function stop_timers(){
 	clearInterval(wd_timer);
 }
 
-
-
-
-
-
-
 function loop(){
 
   if(midibuffer.length>0 && netsid.busy_flag==false){
@@ -506,11 +500,17 @@ function sid_flush_cb(){
         minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
     }
 }
+var time = [];
 
 function wd_reset(){
-
    if(clients.length>0){
-	  minsvc.min_queue_frame(MIN_ID_WD,[]);
+   		let timecode = 4294967296-(Math.floor(microtime.now()/3.125)&0xFFFFFFFF);
+   		//console.log(timecode);
+       	time[0] = (timecode >>> 24) & 0xff;
+       	time[1] = (timecode >>> 16) & 0xff;
+       	time[2] = (timecode >>> 8) & 0xff;
+       	time[3] = timecode & 0xff;
+   		minsvc.min_queue_frame(MIN_ID_WD,time);
    }
 }
 

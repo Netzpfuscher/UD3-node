@@ -22,7 +22,8 @@
     "rtpmidi": "0.1.9",
     "serialport": "^7.1.5",
     "socket.io": "^2.2.0",
-    "yargs": ">=13.2.2"
+    "yargs": ">=13.2.2",
+    "microtime": ">=3.0.0"
   },
   "scripts": {
     "start": "node main.js"
