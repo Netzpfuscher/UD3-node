@@ -25,7 +25,7 @@ module.exports = class nwsid{
 		this.connect();
 		
 		this.last_frame = Date.now();
-		this.registers=new Buffer.from(Array(29));
+		this.registers=new Buffer.from(Array(33));
 		this.registers[0]=0xFF;
 		this.registers[1]=0xFF;
 		this.registers[2]=0xFF;
@@ -37,6 +37,8 @@ module.exports = class nwsid{
 		this.busy_flag = false;
 		this.data_cb=null;
 		this.flush_cb=null;
+		this.ud_time= new Uint32Array(1);
+		this.ud_time[0]=0;
 	}
 	
 	busy(flag){
@@ -99,8 +101,9 @@ module.exports = class nwsid{
 		
 		switch(data[0]){
 			case this.CMD_FLUSH:
+
 			    this.flush_cb();
-				this.send_ok(socket);
+			    this.send_ok(socket);
 			break;
 			case 1:
 				this.send_ok(socket);
@@ -112,6 +115,7 @@ module.exports = class nwsid{
 				this.send_ok(socket);
 			break;
 			case 4:
+				//console.log("----------------------Try-Delay");
 				this.send_ok(socket);
 			break;
 			case 5:
@@ -122,18 +126,25 @@ module.exports = class nwsid{
 				}else{
 					this.send_ok(socket);
 				}
-
+                this.delay=0;
 				for(let i=4;i<data.length;i+=4){
 					let delay = data[i]<<8;
 					delay |= data[i+1];
-					this.delay=delay;
+					this.delay+=delay;
 					//console.log('Delay: ' + delay + ' Register: ' + data[i+2] + ' Value: ' + data[i+3])
 					if(data[i+2]<25){
 						this.registers[data[i+2]+4] = data[i+3];
 					}
 				}
-
+                //console.log(this.ud_time);
+                this.registers[29] = (this.ud_time[0] & 0xFF);
+                this.registers[30] = (this.ud_time[0]>>8) & 0xFF;
+                this.registers[31] = (this.ud_time[0]>>16) & 0xFF;
+				this.registers[32] = (this.ud_time[0]>>24) & 0xFF;
+				//console.log(this.delay / 3.125);
 				this.data_cb(this.registers);
+				//console.log(this.ud_time[0]);
+				this.ud_time[0] = this.ud_time[0] - Math.floor(this.delay / 3.125);  //3.125us Tick Time of SG-Timer in UD3
 
 
 			break;

@@ -3,6 +3,7 @@ var tt = require("./telemetry.js");
 var telemetry = new tt();
 var fs = require('fs');
 var ini = require('ini');
+const dgram = require('dgram');
 
 var _netsid = require('./nwsid.js');
 var microtime = require('microtime')
@@ -10,6 +11,9 @@ var microtime = require('microtime')
 var rtpmidi = require('rtpmidi');
 
 var midibuffer = [];
+
+var midi_clients = {num: 0, clients: []};
+var command_clients = {num: 0, clients: []};
 
 
 var yargs = require('yargs');
@@ -48,7 +52,12 @@ const SYNTH_CMD_SID=0x02;
 const SYNTH_CMD_MIDI=0x03;
 const SYNTH_CMD_OFF =0x04;
 
+function exitHandler(options, exitCode) {
 
+    if (options.cleanup) console.log('clean');
+    if (exitCode || exitCode === 0) console.log(exitCode);
+    if (options.exit) process.exit();
+}
 
 var argv = yargs
   	.usage('UD3-node interface\n\nUsage: $0 [options]')
@@ -311,9 +320,8 @@ var net = require('net');
 var server = net.createServer(function(socket) {
 	
 });
-var midi_server = net.createServer(function(socket) {
-	
-});
+var midi_server = dgram.createSocket('udp4');
+var command_server = dgram.createSocket('udp4');
 
 if(config.SID.enabled){
 	var netsid = new _netsid(parseInt(config.SID.port),config.SID.name);
@@ -362,30 +370,122 @@ server.on('connection', function(sock) {
 	});
 });
 
+
+//MIDI-Server
 console.log("Bind midi server to " + config.midi.port);
-midi_server.listen(parseInt(config.midi.port),'0.0.0.0');
-let midi_clients = [];
-midi_server.on('connection', function(sock) {
-    console.log('CONNECTED midi: ' + sock.remoteAddress + ':' + sock.remotePort);
-	if(midi_clients.length>=num_con){
-		console.log('ERROR: Max number of clients connected');
-		sock.destroy();
-		return;
+
+if(typeof(config.midi.clients) != 'undefined'){
+	for(let i =0; i<config.midi.clients.length;i++){
+		let arr = config.midi.clients[i].split(':');
+		midi_clients.clients.push({ip:arr[0],port:arr[1]});
+		midi_clients.num++;
 	}
-    midi_clients.push(sock);
-    sock.on('data', function(data) {
-        //console.log('DATA ' + sock.remoteAddress + ': ' + data);
-        for(let i=0;i<data.length;i++){
-            midibuffer.push(data[i]);
-        }
-    });
-	sock.on('close',  function () {
-		console.log('CLOSED: ' + sock.remoteAddress  + ':' + sock.remotePort);
-		midi_clients.splice(midi_clients.indexOf(sock), 1);
-	});
+}
+
+midi_server.on('close', (err)=> {
+    console.log('MIDI UDP socket closed')
 });
 
+midi_server.on('error', (err)=> {
+	console.log('midiserver error: ',err);
+	midi_server.close();
+});
 
+midi_server.on('message', (msg, rinfo)=> {
+    for (let i = 0; i < msg.length; i++) {
+        midibuffer.push(msg[i]);
+    }
+});
+
+midi_server.on('listening', ()=> {
+    console.log('MIDI-server listening');
+});
+
+midi_server.bind(config.midi.port);
+
+
+//Command-Server
+console.log("Bind command server to " + config.command.port);
+
+command_server.on('close', (err)=> {
+    console.log('Command UDP socket closed! ',err)
+});
+
+command_server.on('error', (err)=> {
+    console.log('Commandserver Error: ', err);
+
+    midi_server.close();
+});
+
+command_server.on('message', (msg, rinfo)=> {
+
+	let temp = msg.toString().split(';');
+	console.log(temp);
+	switch(temp[0]){
+		case 'add midi-client':
+            for(let i=0;i<midi_clients.clients.length;i++){
+                if(rinfo.address == midi_clients.clients[i].ip && temp[1] ==  midi_clients.clients[i].port){
+                	return;
+                }
+            }
+        	midi_clients.num++;
+        	midi_clients.clients.push({ip:rinfo.address,port:temp[1]});
+        	break;
+        case 'add command-client':
+            for(let i=0;i<command_clients.clients.length;i++){
+                if(rinfo.address == command_clients.clients[i].ip && temp[1] ==  command_clients.clients[i].port){
+                    return;
+                }
+            }
+            command_clients.num++;
+            command_clients.clients.push({ip:rinfo.address,port:temp[1]});
+            break;
+        case 'remove midi-client':
+            for(let i=0;i<midi_clients.clients.length;i++){
+                if(rinfo.address == midi_clients.clients[i].ip && temp[1] ==  midi_clients.clients[i].port){
+                    midi_clients.clients.splice(i,1);
+                    midi_clients.num--;
+                }
+            }
+            break;
+		case 'remove command-client':
+            for(let i=0;i<command_clients.clients.length;i++){
+            	if(rinfo.address == command_clients.clients[i].ip && temp[1] ==  command_clients.clients[i].port){
+            		command_clients.clients.splice(i,1);
+                    command_clients.num--;
+				}
+			}
+            break;
+        case 'flush midi':
+            midibuffer=[];
+            let temp_buf=[];
+            temp_buf[0]=SYNTH_CMD_FLUSH;
+            netsid.ud_time[0]= 4294967296-(Math.floor(microtime.now()/3.125));
+            minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
+            if(last_synth!=2){
+                last_synth=2;
+                temp_buf[0]=SYNTH_CMD_SID;
+                minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
+            }
+            break;
+	}
+
+});
+
+command_server.on('listening', ()=> {
+    console.log('Command server listening');
+    if(config.command.server != '') {
+    	let data = Buffer.from('add midi-client;' + midi_server.address().port);
+        	command_server.send(data, config.command.server_port, config.command.server, (err) => {
+        })
+        data = Buffer.from('add command-client;' + command_server.address().port);
+        	command_server.send(data, config.command.server_port, config.command.server, (err) => {
+        })
+    }
+
+});
+
+command_server.bind(config.command.port);
 
 function gaugeValChange(data){
 	if(mqtt_client.connected){
@@ -457,7 +557,7 @@ function start_mqtt_telemetry(){
 }
 
 function start_timers(){
-	loop_timer = setInterval(loop, 10);
+	loop_timer = setInterval(loop, 20);
 	wd_timer = setInterval(wd_reset, 100);
 }
 
@@ -467,7 +567,7 @@ function stop_timers(){
 }
 
 function loop(){
-
+	//if(midibuffer.length==0)netsid.ud_time= 4294967296-(Math.floor(microtime.now()/3.125)&0xFFFFFFFF);
   if(midibuffer.length>0 && netsid.busy_flag==false){
       let cnt=midibuffer.length;
 
@@ -483,22 +583,39 @@ function loop(){
 netsid.data_cb=sid_cb;
 netsid.flush_cb=sid_flush_cb;
 
+
+
 function sid_cb(data){
 	//console.log(data);
+
+	for(let i=0;i<midi_clients.num;i++){
+		midi_server.send(data,midi_clients.clients[i].port,midi_clients.clients[i].ip, (err)=>{
+		})
+	}
     for (let i = 0; i < data.length; i++) {
         midibuffer.push(data[i]);
     }
 }
-function sid_flush_cb(){
-	midibuffer=[];
-	let temp_buf=[];
-	temp_buf[0]=SYNTH_CMD_FLUSH;
-    minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
-    if(last_synth!=2){
-        last_synth=2;
-        temp_buf[0]=SYNTH_CMD_SID;
-        minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
+
+
+function sid_flush_cb() {
+    midibuffer = [];
+    let temp_buf = [];
+    temp_buf[0] = SYNTH_CMD_FLUSH;
+    netsid.ud_time[0] = 4294967296 - (Math.floor(microtime.now() / 3.125));
+    minsvc.min_queue_frame(MIN_ID_SYNTH, temp_buf);
+    if (last_synth != 2) {
+        last_synth = 2;
+        temp_buf[0] = SYNTH_CMD_SID;
+        minsvc.min_queue_frame(MIN_ID_SYNTH, temp_buf);
     }
+    if (config.command.server == '') {
+        for(let i=0;i<command_clients.num;i++){
+        	let data = Buffer.from('flush midi');
+            command_server.send(data,command_clients.clients[i].port,command_clients.clients[i].ip, (err)=>{
+            })
+        }
+	}
 }
 var time = [];
 
