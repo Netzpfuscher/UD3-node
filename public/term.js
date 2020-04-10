@@ -646,6 +646,7 @@ function ondrop(e){
 		}else if (extension=="dmp") {
 			loadSIDFile(file);
 		}else if (extension=="cyacd") {
+            terminal.io.println("Entering bootloader...");
             send_command('\rbootloader\r');
             setTimeout(() => {
                 wsocket.emit('ctl message', 'transparent=1');
@@ -653,9 +654,9 @@ function ondrop(e){
                     ldr.connect();
                     setTimeout(() => {
                         ldr.cyacd(file);
-                    }, 500); 
-                }, 500);   
-            }, 1000);
+                    }, 2000);
+                }, 2000);
+            }, 3000);
 			
         }
    }
