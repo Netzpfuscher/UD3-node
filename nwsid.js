@@ -1,5 +1,6 @@
 var net = require('net');
 var struct = require('./jspack.js');
+var helper = require('./helper');
 
 module.exports = class nwsid{
 	
@@ -25,11 +26,13 @@ module.exports = class nwsid{
 		this.connect();
 		
 		this.last_frame = Date.now();
-		this.registers=new Buffer.from(Array(33));
+		this.registers=new Buffer.from(Array(34));
 		this.registers[0]=0xFF;
 		this.registers[1]=0xFF;
 		this.registers[2]=0xFF;
 		this.registers[3]=0xFF;
+        this.registers[33]=0x00;
+
 		this.fifo = [];
 		this.fifoLength = 200;
 		this.delay=0;
@@ -39,13 +42,54 @@ module.exports = class nwsid{
 		this.flush_cb=null;
 		this.ud_time= new Uint32Array(1);
 		this.ud_time[0]=0;
+
+		this.gen_tmr;
+		this.gen_cb = ()=>{};
+
+        this.sid_reg = {
+            FREQLO1:4,
+            FREQHI1 : 5,
+            PWLO1 : 6,
+            PWHI1 : 7,
+            CR1 : 8,
+            AD1 : 9,
+            SR1 : 10,
+            FREQLO2 : 11,
+            FREQHI2 : 12,
+            PWLO2 : 13,
+            PWHI2 : 14,
+            CR2 : 15,
+            AD2 : 16,
+            SR2 : 17,
+            FREQLO3 : 18,
+            FREQHI3 : 19,
+            PWLO3 : 20,
+            PWHI3 : 21,
+            CR3 : 22,
+            AD3 : 23,
+            SR3 : 24,
+            FCLO : 25,
+            FCHI : 26,
+            Res_Filt : 27,
+            Mode_Vol : 28,
+            UD_TIME0 : 29,
+            UD_TIME1 : 30,
+            UD_TIME2 : 31,
+            UD_TIME3 : 32,
+            END:33
+        }
 	}
 	
 	busy(flag){
 		this.busy_flag=flag;
 	}
 
-	connect(){
+    freqToSID(freq){
+        let x = freq * (18*16777216)/17734475;
+        return x;
+    }
+
+    connect(){
 		this.sid_server.on('connection', (sock) => {
 			console.log('CONNECTED SID: ' + sock.remoteAddress + ':' + sock.remotePort);
 			this.sid_clients.push(sock);
@@ -61,6 +105,148 @@ module.exports = class nwsid{
 			});
 		});
 	}
+
+	start_gen(){
+        this.gen_tmr = setInterval(()=>{
+            this.ud_time[0] = helper.get_ticks();
+            this.registers[this.sid_reg.UD_TIME0] = (this.ud_time[0]>>24) & 0xFF;
+            this.registers[this.sid_reg.UD_TIME1] = (this.ud_time[0]>>16) & 0xFF;
+            this.registers[this.sid_reg.UD_TIME2] = (this.ud_time[0]>>8) & 0xFF;
+            this.registers[this.sid_reg.UD_TIME3] = (this.ud_time[0] & 0xFF);
+            this.data_cb(this.registers);
+            this.gen_cb();
+		},30);
+	}
+
+	stop_gen(){
+		this.set_gate(0,0);
+        this.set_gate(1,0);
+        this.set_gate(2,0);
+		clearInterval(this.gen_tmr);
+	}
+
+	set_osc(n,freq){
+		let high;
+		let low;
+		switch(n){
+			case 0:
+				high = this.sid_reg.FREQHI1;
+				low = this.sid_reg.FREQLO1;
+				break;
+			case 1:
+                high = this.sid_reg.FREQHI2;
+                low = this.sid_reg.FREQLO2;
+				break;
+			case 2:
+                high = this.sid_reg.FREQHI3;
+                low = this.sid_reg.FREQLO3;
+				break;
+			default:
+                console.log("No Channel: " + n);
+				return;
+		}
+		let temp = this.freqToSID(freq);
+        this.registers[low] = temp & 0xFF;
+        this.registers[high] = (temp>>8) & 0xFF;
+	}
+
+    set_pw(n,pw){
+        let high;
+        let low;
+        switch(n){
+            case 0:
+                high = this.sid_reg.PWHI1;
+                low = this.sid_reg.PWLO1;
+                break;
+            case 1:
+                high = this.sid_reg.PWHI2;
+                low = this.sid_reg.PWLO2;
+                break;
+            case 2:
+                high = this.sid_reg.PWHI3;
+                low = this.sid_reg.PWLO3;
+                break;
+            default:
+                return;
+        }
+        if(pw<0) pw =0;
+        if(pw>100) pw = 100;
+        let temp = 4095 / 100 * pw;
+        this.registers[low] = temp & 0xFF;
+        this.registers[high] = (temp>>8) & 0xFF;
+    }
+
+    set_vol(n,vol){
+        let low;
+        switch(n){
+			case 0:
+                low = this.sid_reg.SR1;
+                break;
+            case 1:
+                low = this.sid_reg.SR2;
+                break;
+            case 2:
+                low = this.sid_reg.SR3;
+                break;
+            default:
+                console.log("No Channel: " + n);
+                return;
+        }
+        if(vol<0) vol =0;
+        if(vol>100) vol = 100;
+        let temp = Math.floor(15 / 100 * vol);
+        temp = (temp << 4) | (this.registers[low] & 0x0F);
+        this.registers[low] = temp;
+    }
+
+    set_wave(n,flag){
+        let low;
+        switch(n){
+            case 0:
+                low = this.sid_reg.CR1;
+                break;
+            case 1:
+                low = this.sid_reg.CR2;
+                break;
+            case 2:
+                low = this.sid_reg.CR3;
+                break;
+            default:
+                console.log("No Channel: " + n);
+                return;
+        }
+        if(flag>0){
+			this.registers[low] = this.registers[low] & 0b10111111;
+            this.registers[low] = this.registers[low] | 0b10000000;
+		}else{
+            this.registers[low] = this.registers[low] & 0b01111111;
+            this.registers[low] = this.registers[low] | 0b01000000;
+		}
+    }
+
+    set_gate(n,flag){
+        let low;
+        switch(n){
+            case 0:
+                low = this.sid_reg.CR1;
+                break;
+            case 1:
+                low = this.sid_reg.CR2;
+                break;
+            case 2:
+                low = this.sid_reg.CR3;
+                break;
+			default:
+            	console.log("No Channel: " + n);
+                return;
+        }
+        if(flag>0){
+            this.registers[low] = this.registers[low] | 0b00000001;
+        }else{
+            this.registers[low] = this.registers[low] & 0b11111110;
+        }
+    }
+
 
 	send_ok(socket){
 		let resp;
@@ -137,10 +323,10 @@ module.exports = class nwsid{
 					}
 				}
                 //console.log(this.ud_time);
-                this.registers[29] = (this.ud_time[0] & 0xFF);
-                this.registers[30] = (this.ud_time[0]>>8) & 0xFF;
-                this.registers[31] = (this.ud_time[0]>>16) & 0xFF;
-				this.registers[32] = (this.ud_time[0]>>24) & 0xFF;
+                this.registers[32] = (this.ud_time[0] & 0xFF);
+                this.registers[31] = (this.ud_time[0]>>8) & 0xFF;
+                this.registers[30] = (this.ud_time[0]>>16) & 0xFF;
+				this.registers[29] = (this.ud_time[0]>>24) & 0xFF;
 				//console.log(this.delay / 3.125);
 				this.data_cb(this.registers);
 				//console.log(this.ud_time[0]);

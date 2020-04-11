@@ -4,9 +4,10 @@ var telemetry = new tt();
 var fs = require('fs');
 var ini = require('ini');
 const dgram = require('dgram');
+const helper = require('./helper.js');
 
 var _netsid = require('./nwsid.js');
-var microtime = require('microtime')
+var microtime = require('microtime');
 
 var rtpmidi = require('rtpmidi');
 
@@ -32,6 +33,7 @@ var last_synth=0;
 
 const MIN_ID_WD=10;
 const MIN_ID_MIDI=20;
+const MIN_ID_SID=21;
 const MIN_ID_TERM=0;
 const MIN_ID_RESET=11;
 const MIN_ID_COMMAND=12;
@@ -193,7 +195,6 @@ if(config.webserver.enabled)	{
 	
 	socket.on('trans message', (data) => {
 		if(!port.writable) return;
-		console.log('Send: ' + data.length);
         port.write(data);
 	});
 	
@@ -201,16 +202,18 @@ if(config.webserver.enabled)	{
         let sck_num=search_socket(socket);
 		switch(data){
 			case 'transparent=1':
-			stop_timers();
-			if(sck_num==-1) return;
-			transparent_id = sck_num;
-			console.log('Transparent mode enabled');
+			    //port.flush((error)=>{});
+			    stop_timers();
+			    if(sck_num==-1) return;
+			    transparent_id = sck_num;
+			    console.log('Transparent mode enabled');
 			break;
-			case 'transparent=0':
-            send_min_socket(sck_num, 'Websocket', true);
-			start_timers();
-			transparent_id=-1;
-			console.log('Transparent mode disabled');
+            case 'transparent=0':
+                //port.flush((error)=>{});
+                send_min_socket(sck_num, 'Websocket', true);
+                start_timers();
+                transparent_id=-1;
+                console.log('Transparent mode disabled');
 			break;
 		}
 	});
@@ -323,6 +326,7 @@ var server = net.createServer(function(socket) {
 var midi_server = dgram.createSocket('udp4');
 var command_server = dgram.createSocket('udp4');
 
+
 if(config.SID.enabled){
 	var netsid = new _netsid(parseInt(config.SID.port),config.SID.name);
 }
@@ -403,6 +407,116 @@ midi_server.on('listening', ()=> {
 
 midi_server.bind(config.midi.port);
 
+let toggle=0;
+
+
+let gyro;
+
+function normal_light(){
+
+    let volume = ((100 * Math.abs(gyro.accTotal))+30);
+
+
+    netsid.set_osc(1,80+(10*Math.abs(gyro.accTotal)));
+    netsid.set_osc(0,60);
+    netsid.set_osc(2,800);
+    netsid.set_vol(0,volume);
+    netsid.set_vol(1,volume);
+    netsid.set_vol(2,80);
+
+    if(helper.get_random_int(10)>8){
+        netsid.set_gate(2,1);
+    }else{
+        netsid.set_gate(2,0);
+    }
+
+}
+
+let cnter=0;
+
+
+function light_loop(){
+    cnter = cnter + 0.05;
+
+    let volume = ((100 * cnter));
+
+    if(cnter>1 || cnter<0){
+        clearInterval(light);
+        netsid.gen_cb = normal_light;
+        cnter=0;
+        volume=0;
+        toggle=1;
+    }
+
+    netsid.set_osc(0,60);
+    netsid.set_vol(0,volume);
+
+    netsid.set_osc(1,80+(100*cnter));
+    netsid.set_vol(1,volume);
+
+    netsid.set_gate(2,0);
+
+}
+
+function light_loop_off(){
+    let temp;
+    cnter = cnter - 0.05;
+
+    let volume = ((100 * cnter));
+
+    if(cnter<0){
+        netsid.stop_gen();
+        cnter=1;
+        volume=0;
+    }
+
+    netsid.set_osc(0,60);
+    netsid.set_vol(0,volume);
+
+    netsid.set_osc(1,80+(100*cnter));
+    netsid.set_vol(1,volume);
+
+    netsid.set_gate(2,0);
+}
+let light;
+
+
+
+if(config.watch.port>0 && config.watch.ip!='') {
+    let _watchsvr = require('./watch.js');
+    let watch_server = new _watchsvr(config.watch.ip, config.watch.port);
+
+    watch_server.data_cb = (gyro1) => {
+
+		gyro=gyro1;
+
+
+		//console.log(gyro.accTotal);
+    };
+    watch_server.button_cb = () => {
+    	if(toggle==0){
+            cnter=0;
+    		//toggle=1;
+            netsid.set_pw(0,50);
+            netsid.set_pw(1,50);
+            netsid.set_pw(2,50);
+            netsid.set_wave(0,0);
+            netsid.set_wave(1,0);
+            netsid.set_wave(2,1);
+            netsid.set_gate(0,1);
+            netsid.set_gate(1,1);
+
+            netsid.gen_cb = light_loop;
+            netsid.start_gen();
+
+        }else{
+    		toggle=0;
+    		cnter=1;
+            netsid.gen_cb = light_loop_off;
+        }
+    }
+}
+
 
 //Command-Server
 console.log("Bind command server to " + config.command.port);
@@ -477,10 +591,10 @@ command_server.on('listening', ()=> {
     if(config.command.server != '') {
     	let data = Buffer.from('add midi-client;' + midi_server.address().port);
         	command_server.send(data, config.command.server_port, config.command.server, (err) => {
-        })
+        });
         data = Buffer.from('add command-client;' + command_server.address().port);
         	command_server.send(data, config.command.server_port, config.command.server, (err) => {
-        })
+        });
     }
 
 });
@@ -505,7 +619,7 @@ function cbEvent(data){
 minsvc.sendByte = (data) => {
 	if(!port.writable) return;
 	port.write(data);
-}
+};
 
 minsvc.handler = (id,data) => {
     
@@ -548,7 +662,7 @@ minsvc.handler = (id,data) => {
         }
         
     }
-}
+};
 
 function start_mqtt_telemetry(){
 	send_min_socket(num_con,"MQTT",true);
@@ -567,7 +681,6 @@ function stop_timers(){
 }
 
 function loop(){
-	//if(midibuffer.length==0)netsid.ud_time= 4294967296-(Math.floor(microtime.now()/3.125)&0xFFFFFFFF);
   if(midibuffer.length>0 && netsid.busy_flag==false){
       let cnt=midibuffer.length;
 
@@ -580,25 +693,19 @@ function loop(){
  
 }
 
-netsid.data_cb=sid_cb;
-netsid.flush_cb=sid_flush_cb;
 
+netsid.data_cb = (data) => {
+    for(let i=0;i<midi_clients.num;i++){
+        midi_server.send(data,midi_clients.clients[i].port,midi_clients.clients[i].ip, (err)=>{
+        })
+    }
 
-
-function sid_cb(data){
-	//console.log(data);
-
-	for(let i=0;i<midi_clients.num;i++){
-		midi_server.send(data,midi_clients.clients[i].port,midi_clients.clients[i].ip, (err)=>{
-		})
-	}
     for (let i = 0; i < data.length; i++) {
         midibuffer.push(data[i]);
     }
-}
+};
 
-
-function sid_flush_cb() {
+netsid.flush_cb = ()=>{
     midibuffer = [];
     let temp_buf = [];
     temp_buf[0] = SYNTH_CMD_FLUSH;
@@ -611,23 +718,18 @@ function sid_flush_cb() {
     }
     if (config.command.server == '') {
         for(let i=0;i<command_clients.num;i++){
-        	let data = Buffer.from('flush midi');
+            let data = Buffer.from('flush midi');
             command_server.send(data,command_clients.clients[i].port,command_clients.clients[i].ip, (err)=>{
             })
         }
-	}
-}
-var time = [];
+    }
+};
+
+
 
 function wd_reset(){
    if(clients.length>0){
-   		let timecode = 4294967296-(Math.floor(microtime.now()/3.125)&0xFFFFFFFF);
-   		//console.log(timecode);
-       	time[0] = (timecode >>> 24) & 0xff;
-       	time[1] = (timecode >>> 16) & 0xff;
-       	time[2] = (timecode >>> 8) & 0xff;
-       	time[3] = timecode & 0xff;
-   		minsvc.min_queue_frame(MIN_ID_WD,time);
+   		minsvc.min_queue_frame(MIN_ID_WD,helper.get_ticks.toArray());
    }
 }
 
