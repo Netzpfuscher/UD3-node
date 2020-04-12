@@ -1,3 +1,5 @@
+const helper = require('./helper');
+
 module.exports = class minprot{
 	constructor() {
 		this.rx = [];
@@ -15,7 +17,7 @@ module.exports = class minprot{
 			CRC_1: 'crc_1',
 			CRC_0: 'crc_0',
 			EOF: 'eof'
-		}
+		};
 		
 		this.rx.magic = {
 			HEADER_BYTE: 0xaa,
@@ -23,7 +25,7 @@ module.exports = class minprot{
 			EOF_BYTE: 0x55,
 			ACK: 0xff,
 			RESET: 0xfe
-		}
+		};
 		this.rx.frame = [];
 		this.rx.frame.payload_bytes=0;      // Length of payload received so far
 		this.rx.frame.id_control=0;         // ID and control bit of frame being received
@@ -350,6 +352,11 @@ module.exports = class minprot{
 		sq[5] = (this.rx_space >>> 16) & 0xff;
 		sq[6] = (this.rx_space >>> 8) & 0xff;
 		sq[7] = this.rx_space & 0xff;
+		let time = helper.get_ticks();
+        sq[8] = (time >>> 24) & 0xff;
+        sq[9] = (time >>> 16) & 0xff;
+        sq[10] = (time >>> 8) & 0xff;
+        sq[11] = time & 0xff;
         this.on_wire_bytes(this.rx.magic.ACK, this.transport_fifo.rn, sq);
         this.transport_fifo.last_sent_ack_time_ms = Date.now();
     //}
@@ -537,12 +544,13 @@ module.exports = class minprot{
     }
     else {
         this.transport_fifo.dropped_frames++;
+        console.log('Dropped Frames: ' + this.transport_fifo.dropped_frames);
         return false;
     }
 }
 	
 	
-}
+};
 	
 	
 	

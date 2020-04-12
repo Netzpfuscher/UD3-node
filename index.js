@@ -1,13 +1,13 @@
-var min = require("./min.js");
-var tt = require("./telemetry.js");
+const min = require("./min.js");
+const tt = require("./telemetry.js");
 var telemetry = new tt();
-var fs = require('fs');
-var ini = require('ini');
+const fs = require('fs');
+const ini = require('ini');
 const dgram = require('dgram');
 const helper = require('./helper.js');
-var _netsid = require('./nwsid.js');
+const _netsid = require('./nwsid.js');
 
-var rtpmidi = require('rtpmidi');
+const rtpmidi = require('rtpmidi');
 
 var midibuffer = [];
 
@@ -15,8 +15,9 @@ var midi_clients = {num: 0, clients: []};
 var command_clients = {num: 0, clients: []};
 
 
-var yargs = require('yargs');
-var mqtt = require('mqtt');
+const yargs = require('yargs');
+const mqtt = require('mqtt');
+
 var mqtt_client;
 
 var wd_timer;
@@ -28,6 +29,8 @@ var num_con = 3;
 var clients = Array(num_con);
 
 var last_synth=0;
+
+let config;
 
 
 
@@ -59,10 +62,10 @@ var argv = yargs
   	})
 	.argv;
 if(argv.config){
-    var config = ini.parse(fs.readFileSync(argv.config, 'utf-8')); 
+    config = ini.parse(fs.readFileSync(argv.config, 'utf-8'));
 }else{
     console.log('Config not specified using default config.ini');
-    var config = ini.parse(fs.readFileSync('config.ini', 'utf-8')); 
+    config = ini.parse(fs.readFileSync('config.ini', 'utf-8'));
 }
      
 var session = rtpmidi.manager.createSession({
@@ -513,7 +516,7 @@ minsvc.handler = (id,data) => {
 	if(id < num_con){
         
 		if(clients[id] != null){
-            if(typeof clients[id].write != 'function'){
+            if(typeof clients[id].write !== 'function'){
                 clients[id].emit('message', data);
                 
             }else{
@@ -526,11 +529,11 @@ minsvc.handler = (id,data) => {
         
 	}
 
-    if(id==helper.min_id.MIDI){
+    if(id===helper.min_id.MIDI){
         for(let i = 0;i<data.length;i++){
-			if(data[i]==0x78){
+			if(data[i]===0x78){
 				netsid.busy(true);
-			}else if(data[i]==0x6f){
+			}else if(data[i]===0x6f){
                 netsid.busy(false);
 			}
 
@@ -571,10 +574,8 @@ function start_timers(){
 	}, 20);
 
 	wd_timer = setInterval(()=>{
-        if(clients.length>0) {
-            minsvc.min_queue_frame(helper.min_id.WD, helper.get_ticks.toArray());
-        }
-	}, 100);
+	    minsvc.min_queue_frame(helper.min_id.WD, helper.get_ticks.toArray());
+	}, 200);
 }
 
 function stop_timers(){

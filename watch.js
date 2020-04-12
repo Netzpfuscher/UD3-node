@@ -18,7 +18,7 @@ module.exports = class watchsvr{
         });
 
         this.server.on('error', (err)=> {
-            console.log('watchserver error: ',err);
+            console.log('Watchserver error: ',err);
             this.server.close();
         });
 

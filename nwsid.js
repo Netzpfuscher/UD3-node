@@ -1,20 +1,41 @@
-var net = require('net');
-var struct = require('./jspack.js');
-var helper = require('./helper');
+const net = require('net');
+const jspack = require('./jspack.js');
+const helper = require('./helper');
 
 module.exports = class nwsid{
 	
 	constructor(port, name) {
-		
-		this.OK = 0;
-		this.BUSY = 1;
-		this.ERR = 2;
-		this.READ = 3;
-		this.VERSION = 4;
-		this.COUNT = 5;
-		this.INFO = 6;
+		this.reply = {
+		    OK:0,
+            BUSY:1,
+            ERR:2,
+		    READ:3,
+            VERSION:4,
+            COUNT:5,
+            INFO:6,
+        };
 
-		this.CMD_FLUSH = 0;
+		this.cmd = {
+		    FLUSH:0,
+            TRY_SET_SID_COUNT:1,
+            MUTE:2,
+            TRY_RESET:3,
+            TRY_DELAY:4,
+            TRY_WRITE:5,
+            TRY_READ:6,
+            GET_VERSION:7,
+            TRY_SET_SAMPLING:8,
+            SET_CLOCKING:9,
+            GET_CONFIG_COUNT:10,
+            GET_CONFIG_INFO:11,
+            SET_SID_POSITION:12,
+            SET_SID_LEVEL:13,
+            SET_SID_MODEL:14,
+            SET_DELAY:15,
+            SET_FADE_IN:16,
+            SET_FADE_OUT:17,
+            SET_SID_HEADER:18
+		}
 		
 		this.sid_server = net.createServer(function(socket) {
 	
@@ -25,7 +46,6 @@ module.exports = class nwsid{
 		this.sid_clients = [];
 		this.connect();
 		
-		this.last_frame = Date.now();
 		this.registers=new Buffer.from(Array(34));
 		this.registers[0]=0xFF;
 		this.registers[1]=0xFF;
@@ -33,8 +53,6 @@ module.exports = class nwsid{
 		this.registers[3]=0xFF;
         this.registers[33]=0x00;
 
-		this.fifo = [];
-		this.fifoLength = 200;
 		this.delay=0;
 		this.name = name;
 		this.busy_flag = false;
@@ -84,9 +102,8 @@ module.exports = class nwsid{
 		this.busy_flag=flag;
 	}
 
-    freqToSID(freq){
-        let x = freq * (18*16777216)/17734475;
-        return x;
+    static freqToSID(freq){
+        return freq * (18 * 16777216) / 17734475;
     }
 
     connect(){
@@ -145,7 +162,7 @@ module.exports = class nwsid{
                 console.log("No Channel: " + n);
 				return;
 		}
-		let temp = this.freqToSID(freq);
+		let temp = nwsid.freqToSID(freq);
         this.registers[low] = temp & 0xFF;
         this.registers[high] = (temp>>8) & 0xFF;
 	}
@@ -249,64 +266,61 @@ module.exports = class nwsid{
 
 
 	send_ok(socket){
-		let resp;
-		resp = new Buffer.from(struct.Pack( '!B', [this.OK]));
-		socket.write(resp);
+		let response;
+		response = new Buffer.from(jspack.Pack( '!B', [this.reply.OK]));
+		socket.write(response);
 	}
 	send_busy(socket){
-		let resp;
-		resp = new Buffer.from(struct.Pack( '!B', [this.BUSY]));
-		socket.write(resp);
+		let response;
+		response = new Buffer.from(jspack.Pack( '!B', [this.reply.BUSY]));
+		socket.write(response);
 	}
 	send_count(socket,count){
-		let resp;
-		resp = new Buffer.from(struct.Pack( '!BB', [this.COUNT,count]));
-		socket.write(resp);
+		let response;
+		response = new Buffer.from(jspack.Pack( '!BB', [this.reply.COUNT,count]));
+		socket.write(response);
 	}
 	send_info(socket,type,name){
 		let temp = [];
-		let resp;
-		temp = struct.Pack( '!BB', [this.INFO, type]);
-		resp = name.split("");
-		for(let i=0;i<resp.length;i++){
-			resp[i] = resp[i].charCodeAt(0);
+		let response;
+		temp = jspack.Pack( '!BB', [this.reply.INFO, type]);
+		response = name.split("");
+		for(let i=0;i<response.length;i++){
+			response[i] = response[i].charCodeAt(0);
 		}
-		resp.push(0x00);
-		resp = new Buffer.from(temp.concat(resp));
-		socket.write(resp);
+		response.push(0x00);
+		response = new Buffer.from(temp.concat(response));
+		socket.write(response);
 	}
 	send_version(socket,version){
 		let resp;
-		resp = new Buffer.from(struct.Pack( '!BB', [this.VERSION,version]));
+		resp = new Buffer.from(jspack.Pack( '!BB', [this.reply.VERSION,version]));
 		socket.write(resp);
 	}
 	
 
 	sid_prot(socket, data){
-		let resp;
-		
 		switch(data[0]){
-			case this.CMD_FLUSH:
+			case this.cmd.FLUSH:
 
 			    this.flush_cb();
 			    this.send_ok(socket);
 			break;
-			case 1:
+			case this.cmd.TRY_SET_SID_COUNT:
 				this.send_ok(socket);
 			break;
-			case 2:
+            case this.cmd.MUTE:
 				this.send_ok(socket);
 			break;
-			case 3:
+			case this.cmd.TRY_RESET:
 				this.send_ok(socket);
 			break;
-			case 4:
-				//console.log("----------------------Try-Delay");
+			case this.cmd.TRY_DELAY:
 				this.send_ok(socket);
 			break;
-			case 5:
+			case this.cmd.TRY_WRITE:
 
-				if(this.busy_flag==true){
+				if(this.busy_flag===true){
 					this.send_busy(socket);
 					break;
 				}else{
@@ -322,44 +336,54 @@ module.exports = class nwsid{
 						this.registers[data[i+2]+4] = data[i+3];
 					}
 				}
-                //console.log(this.ud_time);
+
                 this.registers[32] = (this.ud_time[0] & 0xFF);
                 this.registers[31] = (this.ud_time[0]>>8) & 0xFF;
                 this.registers[30] = (this.ud_time[0]>>16) & 0xFF;
 				this.registers[29] = (this.ud_time[0]>>24) & 0xFF;
-				//console.log(this.delay / 3.125);
+
 				this.data_cb(this.registers);
-				//console.log(this.ud_time[0]);
+
 				this.ud_time[0] = this.ud_time[0] - Math.floor(this.delay / 3.125);  //3.125us Tick Time of SG-Timer in UD3
 
 
 			break;
-			case 6:
+			case this.cmd.TRY_READ:
+			    console.log('TRY READ');
 				this.send_ok(socket);
 			break;
-			case 7:
+			case this.cmd.GET_VERSION:
 				this.send_version(socket,2);
 			break;
-			case 8:
+			case this.cmd.TRY_SET_SAMPLING:
 				this.send_ok(socket);
 			break;
-			case 9:
+			case this.cmd.SET_CLOCKING:
 				this.send_ok(socket);
 			break;
-			case 10:
+			case this.cmd.GET_CONFIG_COUNT:
 				this.send_count(socket,1);
 			break;
-			case 11:
-				let MOS_6581 = 0
-				let MOS_8580 = 1
-				this.send_info(socket,MOS_6581,this.name);
+			case this.cmd.GET_CONFIG_INFO:
+				this.send_info(socket,0,this.name);
 			break;
-			case 12:
+			case this.cmd.SET_SID_POSITION:
 				this.send_ok(socket);
 			break;
-			case 14:
+            case this.cmd.SET_SID_LEVEL:
+                this.send_ok(socket);
+                break;
+			case this.cmd.SET_SID_MODEL:
 				this.send_ok(socket);
 			break;
+            case this.cmd.SET_DELAY:
+                this.send_ok(socket);
+                break;
+            case this.cmd.SET_SID_HEADER:
+                this.send_ok(socket);
+                break;
+            default:
+                break;
 		}
 	}
 }
