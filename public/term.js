@@ -1,7 +1,6 @@
 var connected = 0;
 const wavecolor = ["white", "red", "blue", "green", "rgb(255, 128, 0)", "rgb(128, 128, 64)", "rgb(128, 64, 128)", "rgb(64, 128, 128)", "DimGray"];
 var pixel = 1;
-var midi_state=[];
 
 const kill_msg = new Uint8Array([0xB0,0x77,0x00]);
 
@@ -84,11 +83,6 @@ function mergeTypedArraysUnsafe(a, b) {
     return c;
 }
 
-const byt = 29*2;
-var sid_marker = new Uint8Array([0xFF,0xFF,0xFF,0xFF]);
-var frame_cnt=byt
-var frame_cnt_old=0;
-var flow_ctl=1;
 var settings_refresh=0;
 function refresh_UI(){
 	
@@ -131,37 +125,11 @@ function refresh_UI(){
 	}
 	
 	meters.refresh();
-	
-	if(sid_state==2 && flow_ctl==1){
-		if(connected==1){
-			wsocket.emit('midi message', sid_file_marked.slice(frame_cnt_old,frame_cnt));
-			frame_cnt_old=frame_cnt;
-			frame_cnt+=byt;
-			if(frame_cnt>sid_file_marked.byteLength){
-				sid_state=0;
-				frame_cnt=byt;
-				frame_cnt_old=0;
-				console.log("finished");
-			}
 
-		}
-	}
 	
 }
 
- 
-// Initialize player and register event handler
-var Player = new MidiPlayer.Player(processMidiFromPlayer);
-
-
-function processMidiFromPlayer(event){
-	midi_state.progress=Player.getSongPercentRemaining();
-	term_scope.redrawTop();
-	wsocket.emit('midi message', event.bytes_buf);
-}
-
-
-terminal.onTerminalReady = function() {
+ terminal.onTerminalReady = function() {
   // Create a new terminal IO object and give it the foreground.
   // (The default IO object just prints warning messages about unhandled
   // things to the the JS console.)
@@ -516,13 +484,7 @@ wsocket.on('trans message', (data) => {
     });	
 wsocket.on('midi message', (data) => {
         
-		if(data[0]==0x78){
-			flow_ctl=0;
-		}
-		if(data[0]==0x6f){
-			flow_ctl=1;
-		}
-    });	
+   });
 
 
 function clear(){
@@ -536,13 +498,6 @@ function send_command(command){
 	wsocket.emit('message', command);
 }
 
-function readmidi(file){
-
-	var fs = new FileReader();
-	fs.readAsArrayBuffer(file);
-	fs.onload = event_read_midi;
-	
-}
 var simpleIni;
 
 function readTextFile(file)
@@ -567,85 +522,14 @@ function readTextFile(file)
 
 
 
-function event_read_midi(progressEvent){
-
-	Player.loadArrayBuffer(progressEvent.srcElement.result);
-
-}
-
-
-function loadMidiFile(file) {
-	w2ui['toolbar'].get('mnu_midi').text = 'MIDI-File: '+file.name;
-	w2ui['toolbar'].refresh();
-	midi_state.file = file.name;
-	readmidi(file);
-}
-
-function loadSIDFile(file) {
-	w2ui['toolbar'].get('mnu_midi').text = 'SID-File: '+file.name;
-	w2ui['toolbar'].refresh();
-	midi_state.file = file.name;
-	readSID(file);
-}
-
-function readSID(file){
-	var fs = new FileReader();
-	fs.readAsArrayBuffer(file);
-	fs.onload = event_read_SID;
-}
-var sid_file_marked;
-var sid_state=0;
-function event_read_SID(progressEvent){
-	var cnt=0;
-    var sid_file = new Array(progressEvent.srcElement.result.byteLength + ((progressEvent.srcElement.result.byteLength/25)*4));
-	var source_cnt=0;
-	var file = new Uint8Array(progressEvent.srcElement.result)
-	sid_file[cnt++] = 0xFF;
-	sid_file[cnt++] = 0xFF;
-	sid_file[cnt++] = 0xFF;
-	sid_file[cnt++] = 0xFF;
-	
-	
-	while(source_cnt<file.byteLength){
-		sid_file[cnt++]=file[source_cnt++];
-		if(!(source_cnt%25)){
-			sid_file[cnt++] = 0xFF;
-			sid_file[cnt++] = 0xFF;
-			sid_file[cnt++] = 0xFF;
-			sid_file[cnt++] = 0xFF;
-		}
-	}
-	sid_file_marked=sid_file;
-	sid_state=1;
-	
-}
-
-
-
-function startCurrentMidiFile() {
-	midi_state.state = 'playing';
-	Player.play();
-	term_scope.redrawTop();
-}
-
-function stopMidiFile() {
-	Player.stop();
-	midi_state.state = 'stopped';
-	term_scope.redrawTop();
-}
 
 function ondrop(e){
    e.stopPropagation();
    e.preventDefault();
    if(e.dataTransfer.items.length == 1){//only one file
-		sid_state=0;
    		const file = e.dataTransfer.files[0];
 		const extension = file.name.substring(file.name.lastIndexOf(".")+1);
-		if (extension==="mid"){
-			loadMidiFile(file);
-		}else if (extension=="dmp") {
-			loadSIDFile(file);
-		}else if (extension=="cyacd") {
+		if (extension=="cyacd") {
             terminal.io.println("Entering bootloader...");
             send_command('\rbootloader\r');
             setTimeout(() => {
@@ -794,14 +678,6 @@ function setBurstOfftime(time){
 }
 
 
-
-function stopMidiOutput() {
-	playMidiData([0xB0,0x7B,0x00]);
-	//console.log(midiOut);
-}
-
-
-
 const maxOntime = 400;
 const maxBPS = 1000;
 const maxBurstOntime = 1000;
@@ -897,12 +773,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     { id: 'trg_neg', text: 'Negative'}
                 ]
             },
-			
-			{ type: 'menu', id: 'mnu_midi', text: 'MIDI-File: none', icon: 'fa fa-table', items: [
-                { text: 'Play', icon: 'fa fa-bolt'},
-				{ text: 'Stop', icon: 'fa fa-bolt'}
-            ]},
-			
+
 			{ type: 'menu-radio', id: 'synth', icon: 'fa fa-star',
                 text: function (item) {
                     var text = item.selected;
@@ -971,37 +842,6 @@ document.addEventListener('DOMContentLoaded', function () {
 				break;
 				case 'mnu_command:Save EEPROM-Config':
 					warn_eeprom_save();
-				break;
-				case 'mnu_midi:Play':
-					if (midi_state.file==null){
-						terminal.io.println("Please select a MIDI file using drag&drop");
-						break;
-					}
-					if(sid_state==0){
-						send_command('set synth 1\r');
-						startCurrentMidiFile();
-					}
-
-					//startCurrentMidiFile();
-					if(sid_state==1){
-						send_command('set synth 2\r');
-						sid_state=2;
-					}
-				break;
-				case 'mnu_midi:Stop':
-					wsocket.emit('midi message', kill_msg);
-					send_command('set synth 0\r');
-                    
-					if (midi_state.file==null || midi_state.state!='playing'){
-						terminal.io.println("No MIDI file is currently playing");
-						break;
-					}
-					stopMidiFile();
-					if(sid_state==2){
-						sid_state=1;
-						frame_cnt=byt;
-						frame_cnt_old=0;
-					}
 				break;
 				case 'kill_set':
 					send_command('kill set\r');
@@ -1116,10 +956,6 @@ document.addEventListener('DOMContentLoaded', function () {
 	term_scope = new scope(	tterm,
 							'wavecanvas',
 							'waveback');
-	
-	
-
-	midi_state.progress = 0;
 
 });
 

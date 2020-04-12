@@ -5,9 +5,7 @@ var fs = require('fs');
 var ini = require('ini');
 const dgram = require('dgram');
 const helper = require('./helper.js');
-
 var _netsid = require('./nwsid.js');
-var microtime = require('microtime');
 
 var rtpmidi = require('rtpmidi');
 
@@ -31,28 +29,7 @@ var clients = Array(num_con);
 
 var last_synth=0;
 
-const MIN_ID_WD=10;
-const MIN_ID_MIDI=20;
-const MIN_ID_SID=21;
-const MIN_ID_TERM=0;
-const MIN_ID_RESET=11;
-const MIN_ID_COMMAND=12;
-const MIN_ID_SOCKET=13;
-const MIN_ID_SYNTH=14;
-    
-const COMMAND_IP=1;
-const COMMAND_GW=2;
-const COMMAND_MAC=3;
-const COMMAND_SSID=4;
-const COMMAND_PASSWD=5;
-const COMMAND_INFO=6;
-const COMMAND_ETH_STATE=7;
-const COMMAND_GET_CONFIG=8;
 
-const SYNTH_CMD_FLUSH=0x01;
-const SYNTH_CMD_SID=0x02;
-const SYNTH_CMD_MIDI=0x03;
-const SYNTH_CMD_OFF =0x04;
 
 function exitHandler(options, exitCode) {
 
@@ -103,8 +80,8 @@ session.on('message', function(deltaTime, message) {
 	if(last_synth!=1){
 		last_synth=1;
         let temp_buf=[];
-		temp_buf[0]=SYNTH_CMD_MIDI;
-        minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
+		temp_buf[0]=helper.synth_cmd.MIDI;
+        minsvc.min_queue_frame(helper.min_id.SYNTH,temp_buf);
 	}
   for(let i=0;i<message.length;i++){
       midibuffer.push(message[i]);
@@ -306,7 +283,6 @@ if(argv.debug_min){
 	minsvc.debug = 1;
 }
 
-
 if(config.mqtt.enabled){
 	console.log("Connecting to MQTT broker...: " + config.mqtt.server);
 	mqtt_client = mqtt.connect(config.mqtt.server);
@@ -329,6 +305,7 @@ var command_server = dgram.createSocket('udp4');
 
 if(config.SID.enabled){
 	var netsid = new _netsid(parseInt(config.SID.port),config.SID.name);
+
 }
 
 function send_min_socket(num, info, connect){
@@ -338,7 +315,7 @@ function send_min_socket(num, info, connect){
 		connect = 0;
 	}
 	let infoBuffer = Buffer.from(String.fromCharCode(num)+ String.fromCharCode(connect) + info + String.fromCharCode(0), 'utf-8');
-	minsvc.min_queue_frame(MIN_ID_SOCKET,infoBuffer);
+	minsvc.min_queue_frame(helper.min_id.SOCKET,infoBuffer);
 }
 
 console.log("Bind telnet server to " + config.telnet.port);
@@ -407,113 +384,22 @@ midi_server.on('listening', ()=> {
 
 midi_server.bind(config.midi.port);
 
-let toggle=0;
 
-
-let gyro;
-
-function normal_light(){
-
-    let volume = ((100 * Math.abs(gyro.accTotal))+30);
-
-
-    netsid.set_osc(1,80+(10*Math.abs(gyro.accTotal)));
-    netsid.set_osc(0,60);
-    netsid.set_osc(2,800);
-    netsid.set_vol(0,volume);
-    netsid.set_vol(1,volume);
-    netsid.set_vol(2,80);
-
-    if(helper.get_random_int(10)>8){
-        netsid.set_gate(2,1);
-    }else{
-        netsid.set_gate(2,0);
-    }
-
-}
-
-let cnter=0;
-
-
-function light_loop(){
-    cnter = cnter + 0.05;
-
-    let volume = ((100 * cnter));
-
-    if(cnter>1 || cnter<0){
-        clearInterval(light);
-        netsid.gen_cb = normal_light;
-        cnter=0;
-        volume=0;
-        toggle=1;
-    }
-
-    netsid.set_osc(0,60);
-    netsid.set_vol(0,volume);
-
-    netsid.set_osc(1,80+(100*cnter));
-    netsid.set_vol(1,volume);
-
-    netsid.set_gate(2,0);
-
-}
-
-function light_loop_off(){
-    let temp;
-    cnter = cnter - 0.05;
-
-    let volume = ((100 * cnter));
-
-    if(cnter<0){
-        netsid.stop_gen();
-        cnter=1;
-        volume=0;
-    }
-
-    netsid.set_osc(0,60);
-    netsid.set_vol(0,volume);
-
-    netsid.set_osc(1,80+(100*cnter));
-    netsid.set_vol(1,volume);
-
-    netsid.set_gate(2,0);
-}
-let light;
-
-
-
-if(config.watch.port>0 && config.watch.ip!='') {
+if(config.watch.port>0 && config.watch.ip!=='') {
     let _watchsvr = require('./watch.js');
+
     let watch_server = new _watchsvr(config.watch.ip, config.watch.port);
+    watch_server.set_netsid(netsid);
 
-    watch_server.data_cb = (gyro1) => {
+    watch_server.button_cb = (val) => {
+    	if(val===1){
+    		if(watch_server.saber_state==false) {
+                watch_server.saber_start();
+            }else{
+                watch_server.saber_stop();
+			}
+		}
 
-		gyro=gyro1;
-
-
-		//console.log(gyro.accTotal);
-    };
-    watch_server.button_cb = () => {
-    	if(toggle==0){
-            cnter=0;
-    		//toggle=1;
-            netsid.set_pw(0,50);
-            netsid.set_pw(1,50);
-            netsid.set_pw(2,50);
-            netsid.set_wave(0,0);
-            netsid.set_wave(1,0);
-            netsid.set_wave(2,1);
-            netsid.set_gate(0,1);
-            netsid.set_gate(1,1);
-
-            netsid.gen_cb = light_loop;
-            netsid.start_gen();
-
-        }else{
-    		toggle=0;
-    		cnter=1;
-            netsid.gen_cb = light_loop_off;
-        }
     }
 }
 
@@ -573,13 +459,13 @@ command_server.on('message', (msg, rinfo)=> {
         case 'flush midi':
             midibuffer=[];
             let temp_buf=[];
-            temp_buf[0]=SYNTH_CMD_FLUSH;
-            netsid.ud_time[0]= 4294967296-(Math.floor(microtime.now()/3.125));
-            minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
+            temp_buf[0]=helper.synth_cmd.FLUSH;
+            netsid.ud_time[0]= helper.get_ticks();
+            minsvc.min_queue_frame(helper.min_id.SYNTH,temp_buf);
             if(last_synth!=2){
                 last_synth=2;
-                temp_buf[0]=SYNTH_CMD_SID;
-                minsvc.min_queue_frame(MIN_ID_SYNTH,temp_buf);
+                temp_buf[0]=helper.synth_cmd.SID;
+                minsvc.min_queue_frame(helper.min_id.SYNTH,temp_buf);
             }
             break;
 	}
@@ -640,7 +526,7 @@ minsvc.handler = (id,data) => {
         
 	}
 
-    if(id==MIN_ID_MIDI){
+    if(id==helper.min_id.MIDI){
         for(let i = 0;i<data.length;i++){
 			if(data[i]==0x78){
 				netsid.busy(true);
@@ -671,26 +557,29 @@ function start_mqtt_telemetry(){
 }
 
 function start_timers(){
-	loop_timer = setInterval(loop, 20);
-	wd_timer = setInterval(wd_reset, 100);
+
+	loop_timer = setInterval(()=>{
+        if(midibuffer.length>0 && netsid.busy_flag==false){
+            let cnt=midibuffer.length;
+
+            if(cnt>200) cnt = 200;
+            let temp_buf;
+            temp_buf = midibuffer.splice(0,cnt);
+            minsvc.min_queue_frame(helper.min_id.MIDI,temp_buf);
+        }
+        minsvc.min_poll();
+	}, 20);
+
+	wd_timer = setInterval(()=>{
+        if(clients.length>0) {
+            minsvc.min_queue_frame(helper.min_id.WD, helper.get_ticks.toArray());
+        }
+	}, 100);
 }
 
 function stop_timers(){
 	clearInterval(loop_timer);
 	clearInterval(wd_timer);
-}
-
-function loop(){
-  if(midibuffer.length>0 && netsid.busy_flag==false){
-      let cnt=midibuffer.length;
-
-      if(cnt>200) cnt = 200;
-      let temp_buf;
-      temp_buf = midibuffer.splice(0,cnt);
-      minsvc.min_queue_frame(MIN_ID_MIDI,temp_buf);
-  }
-  minsvc.min_poll();
- 
 }
 
 
@@ -708,13 +597,13 @@ netsid.data_cb = (data) => {
 netsid.flush_cb = ()=>{
     midibuffer = [];
     let temp_buf = [];
-    temp_buf[0] = SYNTH_CMD_FLUSH;
-    netsid.ud_time[0] = 4294967296 - (Math.floor(microtime.now() / 3.125));
-    minsvc.min_queue_frame(MIN_ID_SYNTH, temp_buf);
+    temp_buf[0] = helper.synth_cmd.FLUSH;
+    netsid.ud_time[0] = helper.get_ticks();
+    minsvc.min_queue_frame(helper.min_id.SYNTH, temp_buf);
     if (last_synth != 2) {
         last_synth = 2;
-        temp_buf[0] = SYNTH_CMD_SID;
-        minsvc.min_queue_frame(MIN_ID_SYNTH, temp_buf);
+        temp_buf[0] = helper.synth_cmd.SID;
+        minsvc.min_queue_frame(helper.min_id.SYNTH, temp_buf);
     }
     if (config.command.server == '') {
         for(let i=0;i<command_clients.num;i++){
@@ -724,14 +613,5 @@ netsid.flush_cb = ()=>{
         }
     }
 };
-
-
-
-function wd_reset(){
-   if(clients.length>0){
-   		minsvc.min_queue_frame(MIN_ID_WD,helper.get_ticks.toArray());
-   }
-}
-
 
 
