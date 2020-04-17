@@ -1,15 +1,15 @@
 const min = require("./min.js");
 const tt = require("./telemetry.js");
-var telemetry = new tt();
+let telemetry = new tt();
 const fs = require('fs');
 const ini = require('ini');
-const dgram = require('dgram');
 const helper = require('./helper.js');
 const _netsid = require('./nwsid.js');
+const dgram = require('dgram');
 
 const rtpmidi = require('rtpmidi');
 
-var midibuffer = [];
+let midibuffer = [];
 
 var midi_clients = {num: 0, clients: []};
 var command_clients = {num: 0, clients: []};
@@ -18,15 +18,15 @@ var command_clients = {num: 0, clients: []};
 const yargs = require('yargs');
 const mqtt = require('mqtt');
 
-var mqtt_client;
+let mqtt_client;
 
-var wd_timer;
-var loop_timer;
+let wd_timer;
+let loop_timer;
 
-var transparent_id=-1;
+let transparent_id=-1;
 
-var num_con = 3;
-var clients = Array(num_con);
+let num_con = 3;
+let clients = Array(num_con);
 
 var last_synth=0;
 
@@ -41,7 +41,7 @@ function exitHandler(options, exitCode) {
     if (options.exit) process.exit();
 }
 
-var argv = yargs
+let argv = yargs
   	.usage('UD3-node interface\n\nUsage: $0 [options]')
 	.help('help').alias('help', 'h')
   	.version('version', '0.0.2').alias('version', 'V')
@@ -68,7 +68,7 @@ if(argv.config){
     config = ini.parse(fs.readFileSync('config.ini', 'utf-8'));
 }
      
-var session = rtpmidi.manager.createSession({
+let session = rtpmidi.manager.createSession({
     localName: 'Session 1',
     bonjourName: config.midiRTP.name,
     port: parseInt(config.midiRTP.port)
@@ -80,15 +80,16 @@ session.on('ready', function() {
 
 // Route the messages
 session.on('message', function(deltaTime, message) {
-	if(last_synth!=1){
+	if(last_synth!==1){
 		last_synth=1;
         let temp_buf=[];
 		temp_buf[0]=helper.synth_cmd.MIDI;
         minsvc.min_queue_frame(helper.min_id.SYNTH,temp_buf);
 	}
-  for(let i=0;i<message.length;i++){
-      midibuffer.push(message[i]);
-  }
+	message.forEach((data)=>{
+	    midibuffer.push(data);
+	});
+
 });
 
 
@@ -123,7 +124,7 @@ if(config.webserver.enabled)	{
 	  let extName = path.extname(pathName);
 	  let staticFiles = `${__dirname}/public/${pathName}`;
 
-		  if(extName =='.jpg' || extName == '.png' || extName == '.ico' || extName == '.eot' || extName == '.ttf' || extName == '.svg')
+		  if(extName ==='.jpg' || extName === '.png' || extName === '.ico' || extName === '.eot' || extName === '.ttf' || extName === '.svg')
 		  {
 			  if(fs.existsSync(staticFiles)){
 				  let file = fs.readFileSync(staticFiles);
@@ -153,7 +154,7 @@ if(config.webserver.enabled)	{
 	io.sockets.on('connection', (socket) => {
 	console.log("New websocket connection from " + socket.id);
 	let sck_num=search_slot();
-	if(sck_num==-1){
+	if(sck_num===-1){
 		console.log("Too many connections");
 		return;
 	}
@@ -162,15 +163,14 @@ if(config.webserver.enabled)	{
 
 	socket.on('message', (data) => {
 		let sck_num=search_socket(socket);
-		if(sck_num==-1) return;
+		if(sck_num===-1) return;
 		minsvc.min_queue_frame(sck_num,data);
 	});
 	
 	socket.on('midi message', (data) => {
-       // console.log(data.length);
-        for(let i=0;i<data.length;i++){
-            midibuffer.push(data[i]);
-        }
+		data.forEach((part)=>{
+            midibuffer.push(part);
+		});
 	});
 	
 	socket.on('trans message', (data) => {
@@ -182,14 +182,12 @@ if(config.webserver.enabled)	{
         let sck_num=search_socket(socket);
 		switch(data){
 			case 'transparent=1':
-			    //port.flush((error)=>{});
 			    stop_timers();
-			    if(sck_num==-1) return;
+			    if(sck_num===-1) return;
 			    transparent_id = sck_num;
 			    console.log('Transparent mode enabled');
 			break;
             case 'transparent=0':
-                //port.flush((error)=>{});
                 send_min_socket(sck_num, 'Websocket', true);
                 start_timers();
                 transparent_id=-1;
@@ -200,7 +198,7 @@ if(config.webserver.enabled)	{
 	socket.on('disconnect', function () {
 		console.log("Websocket connection closed from " + socket.id);
         let sck_num=search_socket(socket);
-		if(sck_num==-1) return;
+		if(sck_num===-1) return;
 		send_min_socket(sck_num, 'Websocket', false);
 		clients[sck_num]=null;
     });
@@ -219,18 +217,18 @@ function search_slot(){
 
 function search_socket(socket){
 	for(let i=0;i<clients.length;i++){
-		if(clients[i]==socket) return i;
+		if(clients[i]===socket) return i;
 	}
 	return -1;
 }
 
 const SerialPort = require('serialport')
 var port;
-if(config.serial.autodetect == true){
+if(config.serial.autodetect === true){
     let serial_list = SerialPort.list();
     serial_list.then(function(value) {
         for(let i=0;i<value.length;i++){
-            if(value[i].serialNumber == config.serial.port){
+            if(value[i].serialNumber === config.serial.port){
                 port = new SerialPort(value[i].comName, { baudRate: parseInt(config.serial.baudrate,10) });
                 install_port_cb();
             }
@@ -260,9 +258,6 @@ function install_port_cb() {
     port.on('data', function (data) {
         if(transparent_id>-1){
             clients[transparent_id].emit('trans message', data);
-            //for(let i=0;i<data.length;i++){
-            //console.log('Rec: ' + data[i].toString(16));
-            //}
         }else{
             minsvc.min_poll(data);
         }
@@ -297,7 +292,7 @@ if(config.mqtt.enabled){
 }
 
 
-var net = require('net');
+const net = require('net');
 
 var server = net.createServer(function(socket) {
 	
@@ -312,7 +307,7 @@ if(config.SID.enabled){
 }
 
 function send_min_socket(num, info, connect){
-	if(connect == true){
+	if(connect === true){
 		connect = 1;
 	}else{
 		connect = 0;
@@ -330,7 +325,7 @@ for(let i=0;i<num_con;i++){
 server.on('connection', function(sock) {
     console.log('CONNECTED telnet: ' + sock.remoteAddress + ':' + sock.remotePort);
 	let sck_num = search_slot();
-	if(sck_num==-1){
+	if(sck_num===-1){
 		console.log("Too many connections");
 		sock.destroy();
 		return;
@@ -342,13 +337,13 @@ server.on('connection', function(sock) {
         //console.log('DATA ' + sock.remoteAddress + ': ' + data);
         let rawBuffer = Buffer.from(data,'binary');
 		let sck_num = search_socket(sock);
-		if(sck_num==-1) return;
+		if(sck_num===-1) return;
         minsvc.min_queue_frame(sck_num,rawBuffer);
     });
 	sock.on('close',  function () {
 		console.log('CLOSED: ' + sock.remoteAddress  + ':' + sock.remotePort);
 		let sck_num = search_socket(sock);
-		if(sck_num==-1) return;
+		if(sck_num===-1) return;
 		send_min_socket(sck_num, sock.remoteAddress, false);
 		clients[sck_num]=null;
 	});
@@ -362,7 +357,6 @@ if(typeof(config.midi.clients) != 'undefined'){
 	for(let i =0; i<config.midi.clients.length;i++){
 		let arr = config.midi.clients[i].split(':');
 		midi_clients.clients.push({ip:arr[0],port:arr[1]});
-		midi_clients.num++;
 	}
 }
 
@@ -396,7 +390,7 @@ if(config.watch.port>0 && config.watch.ip!=='') {
 
     watch_server.button_cb = (val) => {
     	if(val===1){
-    		if(watch_server.saber_state==false) {
+    		if(watch_server.saber_state===false) {
                 watch_server.saber_start();
             }else{
                 watch_server.saber_stop();
@@ -423,41 +417,25 @@ command_server.on('error', (err)=> {
 command_server.on('message', (msg, rinfo)=> {
 
 	let temp = msg.toString().split(';');
-	console.log(temp);
+	//console.log(temp);
 	switch(temp[0]){
 		case 'add midi-client':
             for(let i=0;i<midi_clients.clients.length;i++){
-                if(rinfo.address == midi_clients.clients[i].ip && temp[1] ==  midi_clients.clients[i].port){
+                if(rinfo.address === midi_clients.clients[i].ip && temp[1] ===  midi_clients.clients[i].port){
+                    midi_clients.clients[i].alive=5000;
                 	return;
                 }
             }
-        	midi_clients.num++;
-        	midi_clients.clients.push({ip:rinfo.address,port:temp[1]});
+        	midi_clients.clients.push({ip:rinfo.address,port:temp[1],alive:5000});
         	break;
         case 'add command-client':
             for(let i=0;i<command_clients.clients.length;i++){
-                if(rinfo.address == command_clients.clients[i].ip && temp[1] ==  command_clients.clients[i].port){
+                if(rinfo.address === command_clients.clients[i].ip && temp[1] ===  command_clients.clients[i].port){
+                    command_clients.clients[i].alive=5000;
                     return;
                 }
             }
-            command_clients.num++;
-            command_clients.clients.push({ip:rinfo.address,port:temp[1]});
-            break;
-        case 'remove midi-client':
-            for(let i=0;i<midi_clients.clients.length;i++){
-                if(rinfo.address == midi_clients.clients[i].ip && temp[1] ==  midi_clients.clients[i].port){
-                    midi_clients.clients.splice(i,1);
-                    midi_clients.num--;
-                }
-            }
-            break;
-		case 'remove command-client':
-            for(let i=0;i<command_clients.clients.length;i++){
-            	if(rinfo.address == command_clients.clients[i].ip && temp[1] ==  command_clients.clients[i].port){
-            		command_clients.clients.splice(i,1);
-                    command_clients.num--;
-				}
-			}
+            command_clients.clients.push({ip:rinfo.address,port:temp[1],alive:5000});
             break;
         case 'flush midi':
             midibuffer=[];
@@ -471,6 +449,9 @@ command_server.on('message', (msg, rinfo)=> {
                 minsvc.min_queue_frame(helper.min_id.SYNTH,temp_buf);
             }
             break;
+		case 'time':
+			helper.push_remote_offset(helper.get_local_ticks()-temp[1]);
+			break;
 	}
 
 });
@@ -524,7 +505,7 @@ minsvc.handler = (id,data) => {
             }
             
 		}
-	}else if(id == num_con){
+	}else if(id === num_con){
 		telemetry.receive(data);
         
 	}
@@ -538,18 +519,6 @@ minsvc.handler = (id,data) => {
 			}
 
 		}
-		return;
-        for(let i=0;i<clients.length;i++){
-            if(clients[i] != null){
-                if(typeof clients[i].emit == 'function'){
-                    clients[i].emit('midi message', data);
-                }
-            }
-        }
-        for(let i=0;i<midi_clients.length;i++){
-            midi_clients[i].write(buf);
-        }
-        
     }
 };
 
@@ -562,7 +531,7 @@ function start_mqtt_telemetry(){
 function start_timers(){
 
 	loop_timer = setInterval(()=>{
-        if(midibuffer.length>0 && netsid.busy_flag==false){
+        if(midibuffer.length>0 && netsid.busy_flag===false){
             let cnt=midibuffer.length;
 
             if(cnt>200) cnt = 200;
@@ -574,7 +543,7 @@ function start_timers(){
 	}, 20);
 
 	wd_timer = setInterval(()=>{
-	    minsvc.min_queue_frame(helper.min_id.WD, helper.get_ticks.toArray());
+	    minsvc.min_queue_frame(helper.min_id.WD, '');
 	}, 200);
 }
 
@@ -585,14 +554,16 @@ function stop_timers(){
 
 
 netsid.data_cb = (data) => {
-    for(let i=0;i<midi_clients.num;i++){
-        midi_server.send(data,midi_clients.clients[i].port,midi_clients.clients[i].ip, (err)=>{
-        })
-    }
+	midi_clients.clients.forEach((part)=> {
+        midi_server.send(data, part.port, part.ip, (err) => {
+        });
+    });
 
-    for (let i = 0; i < data.length; i++) {
-        midibuffer.push(data[i]);
-    }
+
+	data.forEach((part)=>{
+        midibuffer.push(part);
+	});
+
 };
 
 netsid.flush_cb = ()=>{
@@ -601,18 +572,51 @@ netsid.flush_cb = ()=>{
     temp_buf[0] = helper.synth_cmd.FLUSH;
     netsid.ud_time[0] = helper.get_ticks();
     minsvc.min_queue_frame(helper.min_id.SYNTH, temp_buf);
-    if (last_synth != 2) {
+    if (last_synth !== 2) {
         last_synth = 2;
         temp_buf[0] = helper.synth_cmd.SID;
         minsvc.min_queue_frame(helper.min_id.SYNTH, temp_buf);
     }
     if (config.command.server == '') {
-        for(let i=0;i<command_clients.num;i++){
+        command_clients.clients.forEach((part)=> {
             let data = Buffer.from('flush midi');
-            command_server.send(data,command_clients.clients[i].port,command_clients.clients[i].ip, (err)=>{
+            command_server.send(data,part.port,part.ip, (err)=>{
             })
-        }
+        });
+
     }
 };
 
+setInterval(()=>{
+	function handle_alive(part,index,arr){
+		if(part.alive>0){
+			part.alive -=500;
+		}else{
+			arr.splice(index,1);
+		}
+	}
 
+
+
+
+	if(config.command.server !== '') {
+        let data = Buffer.from('add midi-client;' + midi_server.address().port);
+        command_server.send(data, config.command.server_port, config.command.server, (err) => {
+        });
+        data = Buffer.from('add command-client;' + command_server.address().port);
+        command_server.send(data, config.command.server_port, config.command.server, (err) => {
+        });
+
+
+    }else{
+        midi_clients.clients.forEach(handle_alive);
+        command_clients.clients.forEach(handle_alive);
+
+        command_clients.clients.forEach((part)=>{
+        	let data = Buffer.from('time;' + helper.get_local_ticks());
+            command_server.send(data, part.port, part.ip, (err) => {
+            });
+		});
+
+	}
+},500);

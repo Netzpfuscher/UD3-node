@@ -75,7 +75,6 @@ module.exports = class minprot{
 
 	    this.now = Date.now();
 		this.debug =0;
-
     	}
 
 	crc32_init_context(){
@@ -93,6 +92,10 @@ module.exports = class minprot{
 	crc32_finalize()
 	{
 		return ~this.crc;
+	}
+
+	transparent(mode){
+
 	}
 
 	rx_byte(byte) {
@@ -436,7 +439,6 @@ module.exports = class minprot{
             }
 		}
 
-        let window_size;
         if(this.rx.frame_state == this.rx.states.SOF)
         {
             this.now = Date.now();
