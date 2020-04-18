@@ -5,6 +5,7 @@ let buffer = {samples:Array(ITEMS), total:0, last:0,i:0};
 buffer.samples.fill(0,0,buffer.samples.length);
 
 exports.push_remote_offset = (new_sample)=>{
+    new_sample = new_sample - microtime.now();
     buffer.total -= buffer.samples[buffer.i];
     buffer.total += new_sample;
     buffer.samples[buffer.i] = new_sample;
@@ -13,7 +14,7 @@ exports.push_remote_offset = (new_sample)=>{
     return buffer.last;
 };
 
-
+exports.utime = microtime.now;
 
 function get_local_ticks(){
     return 4294967296-(Math.floor((microtime.now()/3.125-1000)&0xFFFFFFFF));
@@ -21,7 +22,7 @@ function get_local_ticks(){
 exports.get_local_ticks = get_local_ticks;
 
 function get_ticks(){
-    return 4294967296-(Math.floor((microtime.now()/3.125-1000)&0xFFFFFFFF))+buffer.last;
+    return 4294967296-(Math.floor(((microtime.now()+buffer.last)/3.125-1000)&0xFFFFFFFF))+buffer.last;
 }
 
 exports.get_ticks = get_ticks;

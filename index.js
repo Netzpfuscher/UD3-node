@@ -86,6 +86,9 @@ session.on('message', function(deltaTime, message) {
 		temp_buf[0]=helper.synth_cmd.MIDI;
         minsvc.min_queue_frame(helper.min_id.SYNTH,temp_buf);
 	}
+    midi_clients.clients.forEach((part)=> {
+        midi_server.send(message, part.port, part.ip, (err) => {});
+    });
 	message.forEach((data)=>{
 	    midibuffer.push(data);
 	});
@@ -540,7 +543,7 @@ function start_timers(){
             minsvc.min_queue_frame(helper.min_id.MIDI,temp_buf);
         }
         minsvc.min_poll();
-	}, 20);
+	}, 10);
 
 	wd_timer = setInterval(()=>{
 	    minsvc.min_queue_frame(helper.min_id.WD, '');
@@ -613,7 +616,7 @@ setInterval(()=>{
         command_clients.clients.forEach(handle_alive);
 
         command_clients.clients.forEach((part)=>{
-        	let data = Buffer.from('time;' + helper.get_local_ticks());
+        	let data = Buffer.from('time;' + helper.utime());
             command_server.send(data, part.port, part.ip, (err) => {
             });
 		});
