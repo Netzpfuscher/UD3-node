@@ -22,7 +22,7 @@ function get_local_ticks(){
 exports.get_local_ticks = get_local_ticks;
 
 function get_ticks(){
-    return 4294967296-(Math.floor(((microtime.now()+buffer.last)/3.125-1000)&0xFFFFFFFF))+buffer.last;
+    return 4294967296-(Math.floor(((microtime.now()+buffer.last)/3.125-1000)&0xFFFFFFFF));
 }
 
 exports.get_ticks = get_ticks;

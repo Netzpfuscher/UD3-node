@@ -453,7 +453,7 @@ command_server.on('message', (msg, rinfo)=> {
             }
             break;
 		case 'time':
-			helper.push_remote_offset(helper.get_local_ticks()-temp[1]);
+			helper.push_remote_offset(temp[1]);
 			break;
 	}
 
