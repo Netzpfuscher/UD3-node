@@ -9,6 +9,11 @@ class helper {
 		}
 	}
 
+    static bytes_to_signed32(lsb0, lsb1, lsb2 ,msb){
+        let x = (((msb & 0xFF) << 24) | ((msb & 0xFF) << 16) | ((lsb1 & 0xFF) << 8) |(lsb0 & 0xFF));
+        return x;
+    }
+
 	static convertArrayBufferToString(buf, uri = true){
 		let bufView = new Uint8Array(buf);
 		let encodedString = String.fromCharCode.apply(null, bufView);
@@ -109,16 +114,20 @@ class cls_meter {
 		this.meter_buf_old = [];
 		this.meter_buf = [];
 		this.g = [];
+		this.div = [];
 
 		for(let i=0;i<this.num_meters;i++){
 			this.meter_buf_old[i]=255;
 			this.meter_buf[i]=0;
+			this.div[i]=0;
 			this.g[i]= new JustGage({
 				id: ("gauge"+i),
 				value: 255,
 				min: 0,
 				max: 255,
-				title: ("Gauge"+i)
+                humanFriendly: true,
+                humanFriendlyDecimal: 1,
+				label: ("Gauge"+i)
 			});
 		}
 
@@ -141,15 +150,28 @@ class cls_meter {
 
 	value(num, value){
 		if(num<this.num_meters){
-			this.meter_buf[num] = value;
+			if(this.div[num]==0) {
+                this.meter_buf[num] = value;
+            }else{
+                this.meter_buf[num] = value/this.div[num];
+			}
 		}else{
 			console.log('Meter: '+num+'not found');
 		}
 	}
 
+    min_max_label(num, min, max, label){
+        if(num<this.num_meters){
+            this.g[num].refresh( this.meter_buf[num], max, min, label);
+        }else{
+            console.log('Meter: '+num+'not found');
+        }
+    }
+/*
 	text(num,text){
 		if(num<this.num_meters){
-			this.g[num].refreshTitle(text);
+			//this.g[num].refreshTitle(text);
+            this.g[num].config.label = text;
 		}else{
 			console.log('Meter: '+num+'not found');
 		}
@@ -157,9 +179,9 @@ class cls_meter {
 
 	range(num, min, max){
 		if(num<this.num_meters){
-			this.g[num].refresh(min,max);
+			this.g[num].refresh(max);
 		}else{
 			console.log('Meter: '+num+'not found');
 		}
-	}
+	}*/
 }

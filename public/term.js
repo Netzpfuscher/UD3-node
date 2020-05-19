@@ -26,6 +26,7 @@ let transientActive = false;
 
 var uitime = setInterval(refresh_UI, 20);
 var ontimeUI = {totalVal: 0, relativeVal: 100, absoluteVal: 0};
+var offtimeUI = [];
 
 var term_scope;
 
@@ -60,14 +61,6 @@ function progress_cb(info){
 var times = {'pw':0, 'pwd':0, 'bon':0, 'boff':0,'pw_old':0, 'pwd_old':0, 'bon_old':0, 'boff_old':0};
 
 
-
-
-var onReceive = function(info) {
-  if (info.socketId !== socket)
-    return;
-  console.log(info.data);
-};
-
 function reconnect(){
 	send_command('tterm start\r');
 }
@@ -75,32 +68,25 @@ function reconnect(){
 
 var check_cnt=0;
 
-function mergeTypedArraysUnsafe(a, b) {
-    var c = new a.constructor(a.length + b.length);
-    c.set(a);
-    c.set(b, a.length);
-
-    return c;
-}
 
 var settings_refresh=0;
 function refresh_UI(){
 	
 	if(settings_refresh==3){
 		if (times.pw != times.pw_old){
-			send_command('set pw ' + times.pw + '\r');
+			send_hidden_command('set pw ' + times.pw + '\r');
 			times.pw_old=times.pw;
 		}
 		if (times.pwd != times.pwd_old){
-			send_command('set pwd ' + times.pwd + '\r');
+			send_hidden_command('set pwd ' + times.pwd + '\r');
 			times.pwd_old=times.pwd;
 		}
 		if (times.bon != times.bon_old){
-			send_command('set bon ' + times.bon + '\r');
+			send_hidden_command('set bon ' + times.bon + '\r');
 			times.bon_old=times.bon;
 		}
 		if (times.boff != times.boff_old){
-			send_command('set boff ' + times.boff + '\r');
+			send_hidden_command('set boff ' + times.boff + '\r');
 			times.boff_old=times.boff;
 		}
 		settings_refresh=0;
@@ -163,6 +149,9 @@ const TT_CHART_TEXT = 8;
 const TT_CHART_TEXT_CENTER = 9;
 const TT_STATE_SYNC = 10;
 const TT_CONFIG_GET = 11;
+const TT_EVENT = 12;
+const TT_GAUGE32 = 13;
+const TT_GAUGE_CONF32 = 14;
 
 
 const TT_UNIT_NONE = 0;
@@ -171,6 +160,8 @@ const TT_UNIT_A = 2;
 const TT_UNIT_W = 3;
 const TT_UNIT_Hz = 4;
 const TT_UNIT_C = 5;
+const TT_UNIT_kW = 6;
+const TT_UNIT_RPM = 7;
 
 const TYPE_UNSIGNED = 0;
 const TYPE_SIGNED = 1;
@@ -186,9 +177,8 @@ const TT_STATE_COLLECT = 3;
 const TT_STATE_GAUGE = 10;
 
 var term_state=0;
+var term_state_hidden=0;
 
-var chart_cnt = 0;
-var chart_scale_cnt =1;
 
 var tterm = [];
 
@@ -208,19 +198,34 @@ function compute(dat){
 	let color;
 	let size;
 	let chart_num;
+    let gauge_num;
+    let gauge_min;
+    let gauge_max;
 	switch(dat[DATA_TYPE]){
 		case TT_GAUGE:
 			meters.value(dat[DATA_NUM], helper.bytes_to_signed(dat[3],dat[4]));
 		break;
 		case TT_GAUGE_CONF:
-			let gauge_num = dat[2].valueOf();
-			let gauge_min = helper.bytes_to_signed(dat[3],dat[4]);
-			let gauge_max = helper.bytes_to_signed(dat[5],dat[6]);
+			gauge_num = dat[2].valueOf();
+			gauge_min = helper.bytes_to_signed(dat[3],dat[4]);
+			gauge_max = helper.bytes_to_signed(dat[5],dat[6]);
 			dat.splice(0,7);
 			str = helper.convertArrayBufferToString(dat);
-			meters.text(gauge_num, str);
-			meters.range(gauge_num, gauge_min, gauge_max);
+			meters.min_max_label(gauge_num,gauge_min,gauge_max,str);
 		break;
+        case TT_GAUGE32:
+            meters.value(dat[DATA_NUM], helper.bytes_to_signed32(dat[3],dat[4],dat[5],dat[6]));
+            break;
+        case TT_GAUGE_CONF32:
+            gauge_num = dat[2].valueOf();
+            gauge_min = helper.bytes_to_signed32(dat[3],dat[4],dat[5],dat[6]);
+            gauge_max = helper.bytes_to_signed32(dat[7],dat[8],dat[9],dat[10]);
+            meters.div[gauge_num] = helper.bytes_to_signed32(dat[11],dat[12],dat[13],dat[14]);
+            dat.splice(0,15);
+            str = helper.convertArrayBufferToString(dat);
+            meters.min_max_label(gauge_num,gauge_min,gauge_max,str);
+            meters.refresh_all();
+            break;
 		case TT_CHART_CONF:
 
 			chart_num = dat[2].valueOf();
@@ -407,8 +412,7 @@ function updateSliderAvailability() {
 function receive(info){
 	
 	var buf = new Uint8Array(info);
-	var txt = '';
-	
+
 	response_timeout = TIMEOUT;
 	check_cnt=0;
 	
@@ -457,14 +461,113 @@ function receive(info){
 		}
 	}
 }
+let int_state='idle';
+function interpret_hidden(str){
+	str = str.replace(':>','');
+	let data;
+	str.split('\r\n').forEach((part)=>{
+		if(int_state==='idle'){
+			data = part.split(' ');
+			switch (data[0]){
+				case 'set':
+					switch(data[1]){
+						case 'pw':
+							setAbsoluteOntime(parseInt(data[2]));
+							break;
+					}
+
+					break;
+				case 'get':
+					switch(data[1]){
+						case 'pw':
+							int_state='get';
+							break;
+                        case 'pwd':
+                            int_state='get';
+                            break;
+					}
+					break;
+			}
+		}else if(int_state==='get'){
+            data = part.split('=');
+			data[0] = data[0].replace('\t','');
+			int_state='idle';
+			switch (data[0]) {
+				case 'pw':
+                    setAbsoluteOntime(parseInt(data[1]));
+					break;
+                case 'pwd':
+                    setAbsoluteOfftime(parseInt(data[1]));
+                    break;
+
+            }
+		}
+
+
+	});
+	vstr='';
+}
+var vstr = '';
+function receive_hidden(info){
+
+    var buf = new Uint8Array(info);
+
+    response_timeout = TIMEOUT;
+    check_cnt=0;
+
+    for (var i = 0; i < buf.length; i++) {
+
+
+        switch(term_state_hidden){
+            case TT_STATE_IDLE:
+                if(buf[i]== 0xff){
+                    term_state_hidden = TT_STATE_FRAME;
+                }else{
+                	vstr += String.fromCharCode.apply(null, [buf[i]]);
+                }
+                break;
+
+            case TT_STATE_FRAME:
+                receive.buffer[DATA_LEN]=buf[i];
+                receive.bytes_done=0;
+                term_state_hidden=TT_STATE_COLLECT;
+                break;
+
+            case TT_STATE_COLLECT:
+
+                if(receive.bytes_done==0){
+                    receive.buffer[0] = buf[i];
+                    receive.bytes_done++;
+                    break;
+                }else{
+
+                    if(receive.bytes_done<receive.buffer[DATA_LEN]-1){
+                        receive.buffer[receive.bytes_done+1]=buf[i]
+                        receive.bytes_done++;
+                    }else{
+                        receive.buffer[receive.bytes_done+1]=buf[i];
+                        receive.bytes_done=0;
+                        term_state_hidden=TT_STATE_IDLE;
+                        compute(receive.buffer);
+                        receive.buffer=[];
+                    }
+                }
+
+                break;
+
+
+        }
+    }
+    if(vstr != '' && vstr.endsWith(':>')) interpret_hidden(vstr);
+}
 receive.buffer = [];
 receive.bytes_done = 0;
 
 
 function start_conf(){
 	send_command('\r');
-	//send_command('set pw 0\r');
-	send_command('set pwd 50000\r');
+	send_hidden_command('get pw\r');
+	send_hidden_command('get pwd\r');
 	send_command('kill reset\rtterm start\rcls\r');
 }
 
@@ -478,13 +581,20 @@ wsocket.on('connect', () => {
     });
 wsocket.on('message', (data) => {
       receive(data);
-    });	
+    });
+wsocket.on('hidden_message', (data) => {
+    receive_hidden(data);
+});
 wsocket.on('trans message', (data) => {
       ldr.read(data);
     });	
 wsocket.on('midi message', (data) => {
         
    });
+wsocket.on('command', (data) => {
+    terminal.io.println(data);
+    start_conf();
+});
 
 
 function clear(){
@@ -496,6 +606,10 @@ function clear(){
 
 function send_command(command){
 	wsocket.emit('message', command);
+}
+
+function send_hidden_command(command){
+    wsocket.emit('hidden_message', command);
 }
 
 var simpleIni;
@@ -606,6 +720,13 @@ function setAbsoluteOntime(time) {
 	ontimeChanged();
 }
 
+function setAbsoluteOfftime(time) {
+    time = Math.min(maxOfftime, Math.max(0, time));
+    let hz = Math.floor(1/(time/1000000));
+    setSliderValue(null, hz, offtimeUI.slider);
+    slider1();
+}
+
 function setRelativeOntime(percentage) {
 	if (ontimeUI.relativeSelect.checked) {
 		setSliderValue(null, percentage, ontimeUI.slider);
@@ -646,10 +767,6 @@ function slider1(){
 	//send_command('set pwd ' + pwd + '\r');
 }
 
-function setBPS(bps){
-	setSliderValue("slider1", bps);
-	slider1();
-}
 
 function slider2(){
 	var slider = document.getElementById('slider2');
@@ -657,11 +774,6 @@ function slider2(){
 	slider_disp.innerHTML = slider.value + ' ms';
 	times.bon = slider.value;
 	//send_command('set bon ' + slider.value + '\r');
-}
-
-function setBurstOntime(time){
-	setSliderValue("slider2", time);
-	slider2();
 }
 
 function slider3(){
@@ -672,13 +784,9 @@ function slider3(){
 	//send_command('set boff ' + slider.value + '\r');
 }
 
-function setBurstOfftime(time){
-	setSliderValue("slider3", time);
-	slider3();
-}
-
 
 const maxOntime = 400;
+const maxOfftime = 60000;
 const maxBPS = 1000;
 const maxBurstOntime = 1000;
 const maxBurstOfftime = 1000;
@@ -857,7 +965,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 	var html_gauges='';
 	for(var i=0;i<NUM_GAUGES;i++){
-		html_gauges+='<div id="gauge'+ i +'" style= "width: 100px; height: 100px"></div>'
+		html_gauges+='<div id="gauge'+ i +'" style= "width: 100px; height: 80px"></div>'
 	}
 
 	
@@ -910,6 +1018,7 @@ document.addEventListener('DOMContentLoaded', function () {
 	document.getElementById('layout').addEventListener("drop", (e) => ondrop(e));
 	document.getElementById('layout').addEventListener("dragover", ondragover);
 	ontimeUI.slider = $(".w2ui-panel-content .scopeview #ontime #slider")[0];
+    offtimeUI.slider = $(".w2ui-panel-content .scopeview #slider1")[0];
 	ontimeUI.relativeSelect = $(".w2ui-panel-content .scopeview #ontime #relativeSelect")[0];
 	ontimeUI.total = $(".w2ui-panel-content .scopeview #ontime #total")[0];
 	ontimeUI.relative = $(".w2ui-panel-content .scopeview #ontime #relative")[0];

@@ -163,13 +163,19 @@ if(config.webserver.enabled)	{
 	}
     clients[sck_num]=socket;
 	send_min_socket(sck_num, 'Websocket', true);
+	send_min_socket(helper.min_id.HIDDEN, 'Hidden', true);
 
 	socket.on('message', (data) => {
 		let sck_num=search_socket(socket);
 		if(sck_num===-1) return;
 		minsvc.min_queue_frame(sck_num,data);
 	});
-	
+
+	socket.on('hidden_message', (data) => {
+		console.log(data);
+		minsvc.min_queue_frame(helper.min_id.HIDDEN,data);
+	});
+
 	socket.on('midi message', (data) => {
 		data.forEach((part)=>{
             midibuffer.push(part);
@@ -317,6 +323,17 @@ function send_min_socket(num, info, connect){
 	}
 	let infoBuffer = Buffer.from(String.fromCharCode(num)+ String.fromCharCode(connect) + info + String.fromCharCode(0), 'utf-8');
 	minsvc.min_queue_frame(helper.min_id.SOCKET,infoBuffer);
+}
+
+function send_min_socket_wq(num, info, connect){
+    if(connect === true){
+        connect = 1;
+    }else{
+        connect = 0;
+    }
+    let infoBuffer = Buffer.from(String.fromCharCode(num)+ String.fromCharCode(connect) + info + String.fromCharCode(0), 'utf-8');
+
+    minsvc.on_wire_bytes(helper.min_id.SOCKET,0,infoBuffer);
 }
 
 console.log("Bind telnet server to " + config.telnet.port);
@@ -497,6 +514,17 @@ minsvc.sendByte = (data) => {
 minsvc.handler = (id,data) => {
     
     let buf = new Buffer.from(data);
+    if(id==helper.min_id.HIDDEN){
+		clients.forEach((part)=>{
+            if(part == null) return;
+            if(typeof part.emit == 'function'){
+                part.emit('hidden_message', data);
+
+            }
+		});
+		return;
+	}
+
 	if(id < num_con){
         
 		if(clients[id] != null){
@@ -511,6 +539,28 @@ minsvc.handler = (id,data) => {
 	}else if(id === num_con){
 		telemetry.receive(data);
         
+	}
+	if(id===helper.min_id.COMMAND){
+		switch (data[0]) {
+			case helper.cmd.HELLO:
+				let str = "hello_world ";
+				for(let i=1;i<data.length;i++){
+					str+=String.fromCharCode(data[i]);
+				}
+                console.log("Received" , str);
+				minsvc.min_transport_reset(true);
+                clients.forEach((part,i)=>{
+                    if(part == null) return;
+                    send_min_socket_wq(i,"Websocket",true);
+                    console.log("Send Socket",i);
+                    if(typeof part.emit == 'function'){
+                        part.emit('command', str);
+
+                    }
+                });
+                send_min_socket_wq(helper.min_id.HIDDEN, 'Hidden', true);
+				break;
+        }
 	}
 
     if(id===helper.min_id.MIDI){

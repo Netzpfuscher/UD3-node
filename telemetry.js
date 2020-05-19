@@ -35,7 +35,8 @@ module.exports = class ttprot{
         this.TT_STATE_SYNC = 10;
         this.TT_CONFIG_GET = 11;
         this.TT_EVENT = 12;
-
+        this.TT_GAUGE32 = 13;
+        this.TT_GAUGE_CONF32 = 14;
 
         this.TT_UNIT_NONE = 0;
         this.TT_UNIT_V = 1;
@@ -43,6 +44,8 @@ module.exports = class ttprot{
         this.TT_UNIT_W = 3;
         this.TT_UNIT_Hz = 4;
         this.TT_UNIT_C = 5;
+        this.TT_UNIT_kW = 6;
+        this.TT_UNIT_RPM = 7;
 
         this.TYPE_UNSIGNED = 0;
         this.TYPE_SIGNED = 1;
@@ -112,12 +115,22 @@ module.exports = class ttprot{
 			return  x;
 		}
 	}
+
+    bytes_to_signed32(lsb0, lsb1, lsb2 ,msb){
+        let x = (((msb & 0xFF) << 24) | ((msb & 0xFF) << 16) | ((lsb1 & 0xFF) << 8) |(lsb0 & 0xFF));
+        return x;
+    }
 	
 	compute(dat){
 		let str;
+		let value;
+        let gauge_num;
+        let gauge_min;
+        let gauge_max;
+        let gauge_div;
 		switch(dat[this.DATA_TYPE]){
 			case this.TT_GAUGE:
-				let value = this.bytes_to_signed(dat[3],dat[4]);
+				value = this.bytes_to_signed(dat[3],dat[4]);
                 if(typeof this.gauges[dat[this.DATA_NUM]] == 'undefined') break;
 				if(this.gauges[dat[this.DATA_NUM]].value != value){
 					this.gauges[dat[this.DATA_NUM]].value = value;
@@ -128,15 +141,34 @@ module.exports = class ttprot{
 				
 			break;
 			case this.TT_GAUGE_CONF:
-				let gauge_num = dat[2].valueOf();
-                
-				let gauge_min = this.bytes_to_signed(dat[3],dat[4]);
-				let gauge_max = this.bytes_to_signed(dat[5],dat[6]);
+				gauge_num = dat[2].valueOf();
+				gauge_min = this.bytes_to_signed(dat[3],dat[4]);
+				gauge_max = this.bytes_to_signed(dat[5],dat[6]);
 				dat.splice(0,7);
 				str = this.convertArrayBufferToString(dat, false).toLowerCase().replace(' ','_').replace('.','');
                 console.log("TELEMETRY: New gauge conf num: " + gauge_num + " min: " + gauge_min + " max: " + gauge_max + " name: "+ str);
-                this.gauges[gauge_num] = {'name': str, 'min': gauge_min, 'max':gauge_max, 'value':-1};
+                this.gauges[gauge_num] = {'name': str, 'min': gauge_min, 'max':gauge_max, 'value':-1, 'div':0};
 			break;
+            case TT_GAUGE32:
+                value = this.bytes_to_signed32(dat[3],dat[4],dat[5],dat[6]);
+                if(typeof this.gauges[dat[this.DATA_NUM]] == 'undefined') break;
+                if(this.gauges[dat[this.DATA_NUM]].value != value){
+                    this.gauges[dat[this.DATA_NUM]].value = value;
+                    if(this.cbGaugeValue){
+                        this.cbGaugeValue(this.gauges[dat[this.DATA_NUM]]);
+                    }
+                }
+                break;
+            case TT_GAUGE_CONF32:
+                gauge_num = dat[2].valueOf();
+                gauge_min = helper.bytes_to_signed32(dat[3],dat[4],dat[5],dat[6]);
+                gauge_max = helper.bytes_to_signed32(dat[7],dat[8],dat[9],dat[10]);
+                gauge_div = helper.bytes_to_signed32(dat[11],dat[12],dat[13],dat[14]);
+                dat.splice(0,15);
+                str = helper.convertArrayBufferToString(dat);
+                console.log("TELEMETRY: New gauge conf num: " + gauge_num + " min: " + gauge_min + " max: " + gauge_max + " div: " + gauge_div + " name: "+ str);
+                this.gauges[gauge_num] = {'name': str, 'min': gauge_min, 'max':gauge_max, 'value':-1, 'div':gauge_div};
+                break;
 			case this.TT_STATE_SYNC:
 				//setBusActive((dat[2]&1)!=0);
 				//setTransientActive((dat[2]&2)!=0);

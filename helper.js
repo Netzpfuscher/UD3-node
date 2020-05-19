@@ -42,6 +42,7 @@ exports.get_random_int = function (max) {
 };
 
 exports.min_id = {
+    HIDDEN:3,
     WD:10,
     MIDI:20,
     SID:21,
@@ -56,3 +57,7 @@ exports.synth_cmd = {
     SID:0x02,
     MIDI:0x03,
     OFF:0x04};
+
+exports.cmd = {
+    HELLO:0x01
+};
