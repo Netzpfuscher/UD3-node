@@ -17,12 +17,12 @@ exports.push_remote_offset = (new_sample)=>{
 exports.utime = microtime.now;
 
 function get_local_ticks(){
-    return 4294967296-(Math.floor((microtime.now()/3.125-1000)&0xFFFFFFFF));
+    return Date.now()&0xFFFFFFFF;
 }
 exports.get_local_ticks = get_local_ticks;
 
 function get_ticks(){
-    return 4294967296-(Math.floor(((microtime.now()+buffer.last)/3.125-1000)&0xFFFFFFFF));
+    return (Date.now()+buffer.last)&0xFFFFFFFF;
 }
 
 exports.get_ticks = get_ticks;

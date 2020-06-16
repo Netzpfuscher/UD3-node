@@ -344,7 +344,7 @@ module.exports = class nwsid{
 
 				this.data_cb(this.registers);
 
-				this.ud_time[0] = this.ud_time[0] - Math.floor(this.delay / 3.125);  //3.125us Tick Time of SG-Timer in UD3
+				this.ud_time[0] = this.ud_time[0] + Math.floor(this.delay / 1000);  //3.125us Tick Time of SG-Timer in UD3
 
 
 			break;
