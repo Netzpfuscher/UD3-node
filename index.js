@@ -563,6 +563,14 @@ minsvc.handler = (id,data) => {
         }
 	}
 
+    if(id===helper.min_id.FEATURE){
+    	let str="";
+        for(let i=0;i<data.length;i++){
+            str+=String.fromCharCode(data[i]);
+        }
+        console.log(str);
+    }
+
     if(id===helper.min_id.MIDI){
         for(let i = 0;i<data.length;i++){
 			if(data[i]===0x78){
@@ -623,7 +631,6 @@ netsid.flush_cb = ()=>{
     midibuffer = [];
     let temp_buf = [];
     temp_buf[0] = helper.synth_cmd.FLUSH;
-    netsid.ud_time[0] = helper.get_ticks();
     minsvc.min_queue_frame(helper.min_id.SYNTH, temp_buf);
     if (last_synth !== 2) {
         last_synth = 2;

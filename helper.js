@@ -22,7 +22,7 @@ function get_local_ticks(){
 exports.get_local_ticks = get_local_ticks;
 
 function get_ticks(){
-    return (Date.now()+buffer.last)&0xFFFFFFFF;
+    return ((Date.now())+buffer.last)&0xFFFFFFFF;
 }
 
 exports.get_ticks = get_ticks;
@@ -50,7 +50,8 @@ exports.min_id = {
     RESET:11,
     COMMAND:12,
     SOCKET:13,
-    SYNTH:14};
+    SYNTH:14,
+    FEATURE:15};
 
 exports.synth_cmd = {
     FLUSH:0x01,

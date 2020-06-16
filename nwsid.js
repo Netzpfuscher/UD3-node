@@ -60,7 +60,7 @@ module.exports = class nwsid{
 		this.flush_cb=null;
 		this.ud_time= new Uint32Array(1);
 		this.ud_time[0]=0;
-
+        this.delay_accu=0;
 		this.gen_tmr;
 		this.gen_cb = ()=>{};
 
@@ -302,7 +302,8 @@ module.exports = class nwsid{
 	sid_prot(socket, data){
 		switch(data[0]){
 			case this.cmd.FLUSH:
-
+                this.delay_accu=helper.get_ticks();
+                this.ud_time[0]=helper.get_ticks();
 			    this.flush_cb();
 			    this.send_ok(socket);
 			break;
@@ -343,10 +344,8 @@ module.exports = class nwsid{
 				this.registers[29] = (this.ud_time[0]>>24) & 0xFF;
 
 				this.data_cb(this.registers);
-
-				this.ud_time[0] = this.ud_time[0] + Math.floor(this.delay / 1000);  //3.125us Tick Time of SG-Timer in UD3
-
-
+                this.delay_accu += (this.delay / 1000);
+				this.ud_time[0] = this.delay_accu;
 			break;
 			case this.cmd.TRY_READ:
 			    console.log('TRY READ');
